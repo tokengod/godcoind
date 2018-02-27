@@ -109,7 +109,7 @@ UniValue minePosBlock(CWallet *pwallet) {
             }
             //godcoin:pos
             if (pblockfilled->GetBlockTime() > FutureDrift(GetAdjustedTime())) {
-                MilliSleep(3000);
+                MilliSleep(1000);
                 continue;
             }
             validBlock = true;

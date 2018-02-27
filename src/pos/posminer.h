@@ -10,7 +10,8 @@
 #include "wallet/wallet.h"
 #include "primitives/block.h"
 
-static const int POS_MINING_TIMES=100;
+//static const int POS_MINING_TIMES=100;
+static const int POS_MINING_TIMES=1;
 //Will not attempt to add more transactions when GetAdjustedTime() >= nTimeLimit
 //And nTimeLimit = StakeExpirationTime - STAKE_TIME_BUFFER
 static const int32_t STAKE_TIME_BUFFER = 2;

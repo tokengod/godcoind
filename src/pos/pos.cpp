@@ -69,12 +69,14 @@ bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t 
 
     // Base target
     arith_uint256 bnTarget;
+    arith_uint256 bnTarget2;
+    bnTarget2.SetCompact(nBits);
     bnTarget.SetCompact(nBits);
 
     // Weighted target
     int64_t nValueIn = prevoutValue;
     arith_uint256 bnWeight = arith_uint256(nValueIn);
-    bnTarget *= bnWeight;
+    //bnTarget *= bnWeight;
     targetProofOfStake = ArithToUint256(bnTarget);
     //gocoin:pos nNonce
     int32_t nStakeModifier = 0;
@@ -94,14 +96,20 @@ bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t 
         checkSucceed = false;
     } 
 
-    LogPrintf("%s:CheckStakeKernelHash() nBits=%d weight=%s modifier=%d nTimeBlockFrom=%u nPrevout=%s nTimeBlock=%u hashProof=%s prev=%s\n",
+    LogPrintf("%s:CheckStakeKernelHash() nBits=%d weight=%s modifier=%d nTimeBlockFrom=%u nPrevout=%s nTimeBlock=%u hashProof=%s prev=%s "
+              "target:%d, weight:%d, finalTarget:%d, diff:%d，limit:%d\n",
             checkSucceed ? "succeed" : "failed",
             nBits,
             bnWeight.ToString(),
             nStakeModifier,
             blockFromTime, prevout.ToString(), nTimeBlock,
             hashProofOfStake.ToString(),
-            pindexPrev->ToString());
+            pindexPrev->ToString(),
+            bnTarget2.GetCompact(),
+            bnWeight.GetCompact(),
+            bnTarget.GetCompact(),
+            UintToArith256(hashProofOfStake).GetCompact(),
+            UintToArith256(uint256S("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")).GetCompact());
 
     return checkSucceed;
 }
@@ -222,12 +230,14 @@ inline arith_uint256 GetLimit(const Consensus::Params& params){
 }
 
 unsigned int GetNextPosWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params){
-    if (params.fPoSNoRetargeting)
-        return pindexLast->nBits;
+
 
     //first and second pos block use target limit
     if (pindexLast->nHeight < LAST_POW_BLOCK_HEIGHT + 2) 
         return GetLimit(params).GetCompact();
+
+    if (params.fPoSNoRetargeting)
+        return pindexLast->nBits;
     
     // Limit adjustment step
     int64_t nTargetSpacing = params.nPosTargetSpacing;
