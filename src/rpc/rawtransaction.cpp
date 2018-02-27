@@ -823,8 +823,8 @@ UniValue signrawtransaction(const JSONRPCRequest& request)
 #else
     const CKeyStore& keystore = tempKeystore;
 #endif
-
-    int nHashType = SIGHASH_ALL;
+    //godcoin:two way protect
+    int nHashType = SIGHASH_ALL | SIGHASH_FORKID;
     if (request.params.size() > 3 && !request.params[3].isNull()) {
         static std::map<std::string, int> mapSigHashValues = {
             {std::string("ALL"), int(SIGHASH_ALL)},

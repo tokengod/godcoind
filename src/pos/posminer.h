@@ -15,10 +15,6 @@ static const int POS_MINING_TIMES=100;
 //And nTimeLimit = StakeExpirationTime - STAKE_TIME_BUFFER
 static const int32_t STAKE_TIME_BUFFER = 2;
 
-UniValue startPosMiningThread(CWallet *pwallet);
-UniValue stopPosMiningThread();
-UniValue getPosMiningstatus();
-void StakePOS(bool fStake, CWallet *pwallet);
 UniValue minePosBlock(CWallet *pwallet);
 bool CheckStake(const std::shared_ptr<const CBlock> pblock, CWallet& wallet);
 
