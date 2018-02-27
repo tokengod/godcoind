@@ -1223,6 +1223,8 @@ inline void static SendBlockTransactions(const CBlock& block, const BlockTransac
         }
         resp.txn[i] = block.vtx[req.indexes[i]];
     }
+    //godcoin:pos
+    resp.vchBlockSig.assign(block.vchBlockSig.begin(), block.vchBlockSig.end());
     LOCK(cs_main);
     const CNetMsgMaker msgMaker(pfrom->GetSendVersion());
     int nSendFlags = State(pfrom->GetId())->fWantsCmpctWitness ? 0 : SERIALIZE_TRANSACTION_NO_WITNESS;
@@ -2480,6 +2482,8 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
 
             PartiallyDownloadedBlock& partialBlock = *it->second.second->partialBlock;
             ReadStatus status = partialBlock.FillBlock(*pblock, resp.txn);
+            //godcoin:pos
+            pblock->vchBlockSig.assign(resp.vchBlockSig.begin(),resp.vchBlockSig.end());
             if (status == READ_STATUS_INVALID) {
                 MarkBlockAsReceived(resp.blockhash); // Reset in-flight state in case of whitelist
                 Misbehaving(pfrom->GetId(), 100);

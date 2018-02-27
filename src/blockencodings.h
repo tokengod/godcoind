@@ -74,9 +74,15 @@ public:
     uint256 blockhash;
     std::vector<CTransactionRef> txn;
 
+    //godcoin:pos
+    std::vector<unsigned char> vchBlockSig;
+
     BlockTransactions() {}
     BlockTransactions(const BlockTransactionsRequest& req) :
-        blockhash(req.blockhash), txn(req.indexes.size()) {}
+        blockhash(req.blockhash), txn(req.indexes.size()) {
+            //godcoin:pos
+            vchBlockSig.clear();
+        }
 
     ADD_SERIALIZE_METHODS;
 
@@ -94,8 +100,10 @@ public:
             }
         } else {
             for (size_t i = 0; i < txn.size(); i++)
-                READWRITE(REF(TransactionCompressor(txn[i])));
+                READWRITE(REF(TransactionCompressor(txn[i]))); 
         }
+        //godcoin:pos
+        READWRITE(vchBlockSig);
     }
 };
 

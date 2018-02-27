@@ -180,6 +180,15 @@ public:
                         //   (the tx=... number in the SetBestChain debug.log lines)
             3.1         // * estimated number of transactions per second after that timestamp
         };
+
+
+        //godcoin:pos
+        consensus.posLimit = uint256S("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        consensus.nPosSubsidyHalvingInterval = 350400; //halving every  1 years
+        consensus.nPosTargetTimespan = 15 * 60; // 15 minutes
+        consensus.nPosTargetSpacing = 90;  //90 seconds
+        consensus.fPoSNoRetargeting = false;
+        consensus.nLastPOWBlock = LAST_POW_BLOCK_HEIGHT;
     }
 };
 

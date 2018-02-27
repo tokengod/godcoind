@@ -140,6 +140,14 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "echojson", 7, "arg7" },
     { "echojson", 8, "arg8" },
     { "echojson", 9, "arg9" },
+
+    //godcoin newrpc 
+    { "listblocks", 0, "page" },
+    { "listblocks", 1, "length" },
+    { "newlisttransactions", 1, "count" },
+    { "newlisttransactions", 2, "skip" },
+    { "newlisttransactions", 3, "include_watchonly" },
+    { "recenttxstatistics", 0, "daycount" },
 };
 
 class CRPCConvertTable

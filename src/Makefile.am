@@ -156,7 +156,10 @@ BITCOIN_CORE_H = \
   util.h \
   utilmoneystr.h \
   utiltime.h \
+  pos/posvalidation.h \
   validation.h \
+  pos/posminer.h \
+  pos/pos.h \
   validationinterface.h \
   versionbits.h \
   wallet/coincontrol.h \
@@ -166,6 +169,7 @@ BITCOIN_CORE_H = \
   wallet/rpcwallet.h \
   wallet/wallet.h \
   wallet/walletdb.h \
+  pos/poswallet.h \
   warnings.h \
   zmq/zmqabstractnotifier.h \
   zmq/zmqconfig.h\
@@ -211,6 +215,7 @@ libbitcoin_server_a_SOURCES = \
   rpc/net.cpp \
   rpc/rawtransaction.cpp \
   rpc/server.cpp \
+  pos/pos.cpp \
   script/sigcache.cpp \
   script/ismine.cpp \
   timedata.cpp \
@@ -218,6 +223,7 @@ libbitcoin_server_a_SOURCES = \
   txdb.cpp \
   txmempool.cpp \
   ui_interface.cpp \
+  pos/posvalidation.cpp \
   validation.cpp \
   validationinterface.cpp \
   versionbits.cpp \
@@ -245,6 +251,8 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/rpcwallet.cpp \
   wallet/wallet.cpp \
   wallet/walletdb.cpp \
+  pos/poswallet.cpp \
+  pos/posminer.cpp \
   $(BITCOIN_CORE_H)
 
 # crypto primitives library

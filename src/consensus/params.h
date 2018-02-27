@@ -63,6 +63,14 @@ struct Params {
     int64_t DifficultyAdjustmentInterval() const { return nPowTargetTimespan / nPowTargetSpacing; }
     uint256 nMinimumChainWork;
     uint256 defaultAssumeValid;
+    
+    //godcoin:pos
+    uint256 posLimit;
+    bool fPoSNoRetargeting;
+    int nLastPOWBlock;
+    int nPosSubsidyHalvingInterval;
+    int64_t  nPosTargetTimespan;
+    int64_t nPosTargetSpacing;
 };
 } // namespace Consensus
 

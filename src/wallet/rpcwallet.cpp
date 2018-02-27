@@ -26,6 +26,8 @@
 #include "wallet/feebumper.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
+#include "pos/posminer.h"
+#include "rpc/blockchain.h"
 
 #include <stdint.h>
 
@@ -3133,6 +3135,380 @@ UniValue generate(const JSONRPCRequest& request)
     return generateBlocks(coinbase_script, num_generate, max_tries, true);
 }
 
+//godcoin:newrpc
+UniValue newlisttransactions(const JSONRPCRequest& request)
+{
+    CWallet * const pwallet = GetWalletForJSONRPCRequest(request);
+    if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) {
+        return NullUniValue;
+    }
+
+    if (request.fHelp || request.params.size() > 4)
+        throw std::runtime_error(
+            "listtransactions ( \"account\" count skip include_watchonly)\n"
+            "\nReturns up to 'count' most recent transactions skipping the first 'from' transactions for account 'account'.\n"
+            "\nArguments:\n"
+            "1. \"account\"    (string, optional) DEPRECATED. The account name. Should be \"*\".\n"
+            "2. count          (numeric, optional, default=10) The number of transactions to return\n"
+            "3. skip           (numeric, optional, default=0) The number of transactions to skip\n"
+            "4. include_watchonly (bool, optional, default=false) Include transactions to watch-only addresses (see 'importaddress')\n"
+            "\nResult:\n"
+            "[\n"
+            "  {\n"
+            "    \"account\":\"accountname\",       (string) DEPRECATED. The account name associated with the transaction. \n"
+            "                                                It will be \"\" for the default account.\n"
+            "    \"address\":\"address\",    (string) The bitcoin address of the transaction. Not present for \n"
+            "                                                move transactions (category = move).\n"
+            "    \"category\":\"send|receive|move\", (string) The transaction category. 'move' is a local (off blockchain)\n"
+            "                                                transaction between accounts, and not associated with an address,\n"
+            "                                                transaction id or block. 'send' and 'receive' transactions are \n"
+            "                                                associated with an address, transaction id and block details\n"
+            "    \"amount\": x.xxx,          (numeric) The amount in " + CURRENCY_UNIT + ". This is negative for the 'send' category, and for the\n"
+            "                                         'move' category for moves outbound. It is positive for the 'receive' category,\n"
+            "                                         and for the 'move' category for inbound funds.\n"
+            "    \"label\": \"label\",       (string) A comment for the address/transaction, if any\n"
+            "    \"vout\": n,                (numeric) the vout value\n"
+            "    \"fee\": x.xxx,             (numeric) The amount of the fee in " + CURRENCY_UNIT + ". This is negative and only available for the \n"
+            "                                         'send' category of transactions.\n"
+            "    \"confirmations\": n,       (numeric) The number of confirmations for the transaction. Available for 'send' and \n"
+            "                                         'receive' category of transactions. Negative confirmations indicate the\n"
+            "                                         transaction conflicts with the block chain\n"
+            "    \"trusted\": xxx,           (bool) Whether we consider the outputs of this unconfirmed transaction safe to spend.\n"
+            "    \"blockhash\": \"hashvalue\", (string) The block hash containing the transaction. Available for 'send' and 'receive'\n"
+            "                                          category of transactions.\n"
+            "    \"blockindex\": n,          (numeric) The index of the transaction in the block that includes it. Available for 'send' and 'receive'\n"
+            "                                          category of transactions.\n"
+            "    \"blocktime\": xxx,         (numeric) The block time in seconds since epoch (1 Jan 1970 GMT).\n"
+            "    \"txid\": \"transactionid\", (string) The transaction id. Available for 'send' and 'receive' category of transactions.\n"
+            "    \"time\": xxx,              (numeric) The transaction time in seconds since epoch (midnight Jan 1 1970 GMT).\n"
+            "    \"timereceived\": xxx,      (numeric) The time received in seconds since epoch (midnight Jan 1 1970 GMT). Available \n"
+            "                                          for 'send' and 'receive' category of transactions.\n"
+            "    \"comment\": \"...\",       (string) If a comment is associated with the transaction.\n"
+            "    \"otheraccount\": \"accountname\",  (string) DEPRECATED. For the 'move' category of transactions, the account the funds came \n"
+            "                                          from (for receiving funds, positive amounts), or went to (for sending funds,\n"
+            "                                          negative amounts).\n"
+            "    \"bip125-replaceable\": \"yes|no|unknown\",  (string) Whether this transaction could be replaced due to BIP125 (replace-by-fee);\n"
+            "                                                     may be unknown for unconfirmed transactions not in the mempool\n"
+            "    \"abandoned\": xxx          (bool) 'true' if the transaction has been abandoned (inputs are respendable). Only available for the \n"
+            "                                         'send' category of transactions.\n"
+            "  }\n"
+            "]\n"
+
+            "\nExamples:\n"
+            "\nList the most recent 10 transactions in the systems\n"
+            + HelpExampleCli("listtransactions", "") +
+            "\nList transactions 100 to 120\n"
+            + HelpExampleCli("listtransactions", "\"*\" 20 100") +
+            "\nAs a json rpc call\n"
+            + HelpExampleRpc("listtransactions", "\"*\", 20, 100")
+        );
+
+    LOCK2(cs_main, pwallet->cs_wallet);
+
+    std::string strAccount = "*";
+    if (!request.params[0].isNull())
+        strAccount = request.params[0].get_str();
+    int nCount = 10;
+    if (!request.params[1].isNull())
+        nCount = request.params[1].get_int();
+    int nFrom = 0;
+    if (!request.params[2].isNull())
+        nFrom = request.params[2].get_int();
+    isminefilter filter = ISMINE_SPENDABLE;
+    if(!request.params[3].isNull())
+        if(request.params[3].get_bool())
+            filter = filter | ISMINE_WATCH_ONLY;
+
+    if (nCount < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Negative count");
+    if (nFrom < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Negative from");
+
+    //godcoin newrpc : add CurrentTime 2017-12-29
+    UniValue list(UniValue::VOBJ);
+    UniValue ret(UniValue::VARR);
+
+    const CWallet::TxItems & txOrdered = pwallet->wtxOrdered;
+
+    // iterate backwards until we have nCount items to return:
+    for (CWallet::TxItems::const_reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
+    {
+        CWalletTx *const pwtx = (*it).second.first;
+        if (pwtx != 0)
+            ListTransactions(pwallet, *pwtx, strAccount, 0, true, ret, filter);
+        CAccountingEntry *const pacentry = (*it).second.second;
+        if (pacentry != 0)
+            AcentryToJSON(*pacentry, strAccount, ret);
+
+        if ((int)ret.size() >= (nCount+nFrom)) break;
+    }
+    // ret is newest to oldest
+
+    if (nFrom > (int)ret.size())
+        nFrom = ret.size();
+    if ((nFrom + nCount) > (int)ret.size())
+        nCount = ret.size() - nFrom;
+
+    std::vector<UniValue> arrTmp = ret.getValues();
+
+    std::vector<UniValue>::iterator first = arrTmp.begin();
+    std::advance(first, nFrom);
+    std::vector<UniValue>::iterator last = arrTmp.begin();
+    std::advance(last, nFrom+nCount);
+
+    if (last != arrTmp.end()) arrTmp.erase(last, arrTmp.end());
+    if (first != arrTmp.begin()) arrTmp.erase(arrTmp.begin(), first);
+
+    std::reverse(arrTmp.begin(), arrTmp.end()); // Return oldest to newest
+
+    ret.clear();
+    ret.setArray();
+    ret.push_backV(arrTmp);
+    
+    //godcoin newrpc : add CurrentTime 2017-12-29
+    list.push_back(Pair("currentTime",GetAdjustedTime()));
+    list.push_back(Pair("size",(int)ret.size()));
+    list.push_back(Pair("tx",ret));
+    return list;
+}
+
+//godcoin:newrpc
+UniValue transactionsummary(const JSONRPCRequest& request)
+{   
+    if (request.fHelp || request.params.size() > 0)
+        throw std::runtime_error(
+            "transactionSummary \n"
+            "\nReturn transactionSummary\n"
+            "\nResult:\n"
+                    "{"
+                        "\"totalTxfee\":540,"
+                        "\"txCount\":16,"
+                        "\"txOutPut\":1.3"
+                    "}"
+            "\nExamples:\n"
+            + HelpExampleRpc("transactionSummary", "")
+            + HelpExampleRpc("transactionSummary", "")
+        );
+    
+    CWallet * const pwallet = GetWalletForJSONRPCRequest(request);
+    if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) {
+        return NullUniValue;
+    }
+
+    LOCK2(cs_main, pwallet->cs_wallet);
+
+    const CWallet::TxItems & txOrdered = pwallet->wtxOrdered;
+    std::string strAccount = "*";
+    CAmount sumFee = 0;
+    CAmount sumOutput = 0;
+    int64_t txcount = 0;
+    // iterate backwards until we have nCount items to return:
+    for (CWallet::TxItems::const_reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
+    {
+        CWalletTx *const pwtx = (*it).second.first;
+        if (pwtx != 0){
+            CAmount nFee;
+            std::list<COutputEntry> listReceived;
+            std::list<COutputEntry> listSent;
+            pwtx->GetAmounts(listReceived, listSent, nFee, strAccount, ISMINE_SPENDABLE);
+            txcount += listSent.size();
+            txcount += listReceived.size();
+            //send
+            if ((!listSent.empty() || nFee != 0))
+            {
+                for (const COutputEntry& s : listSent){
+                    sumFee += nFee;
+                    sumOutput += s.amount;
+                }
+            }
+            if (listReceived.size() > 0 && (*pwtx).GetDepthInMainChain() >= 0)
+            {
+                for (const COutputEntry& r : listReceived){
+                    sumOutput += r.amount;
+                }
+            }
+        }
+        CAccountingEntry *const pacentry = (*it).second.second;
+        if (pacentry != 0){
+            sumOutput += (*pacentry).nCreditDebit;
+        }
+        if(pwtx == 0 && pacentry == 0){
+            break;
+        }
+    }
+
+    UniValue txme(UniValue::VOBJ);
+    txme.push_back(Pair("totalTxfee", ValueFromAmount(sumFee)));
+    txme.push_back(Pair("txCount", txcount));
+    txme.push_back(Pair("txOutPut", ValueFromAmount(sumOutput)));
+    return txme;
+}
+
+//godcoin:newrpc
+UniValue listblockToJSON(const CBlock& block, const CBlockIndex* blockindex, CWallet * const pwallet)
+{
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("hash", blockindex->GetBlockHash().GetHex()));
+    int confirmations = -1,txsize = 0;
+    // Only report confirmations if the block is on the main chain
+    if (chainActive.Contains(blockindex))
+        confirmations = chainActive.Height() - blockindex->nHeight + 1;
+    result.push_back(Pair("confirmations", confirmations));
+    result.push_back(Pair("strippedsize", (int)::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS)));
+    result.push_back(Pair("size", (int)::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION)));
+    result.push_back(Pair("weight", (int)::GetBlockWeight(block)));
+    result.push_back(Pair("height", blockindex->nHeight));
+    result.push_back(Pair("version", block.nVersion));
+    result.push_back(Pair("versionHex", strprintf("%08x", block.nVersion)));
+    result.push_back(Pair("merkleroot", block.hashMerkleRoot.GetHex()));
+    UniValue txs(UniValue::VARR);
+    int nRequired;
+    txnouttype type;
+    std::vector<CTxDestination> addresses;
+    CAmount sumNet=0,sumFee=0;
+    for(const auto& tx : block.vtx)
+    {
+        txsize++;
+        const CWalletTx& wtx = pwallet->mapWallet[tx->GetHash()];
+        txs.push_back(tx->GetHash().GetHex());
+
+        CAmount nCredit = wtx.GetCredit(ISMINE_SPENDABLE);
+        CAmount nDebit = wtx.GetDebit(ISMINE_SPENDABLE);
+        CAmount nNet = nCredit - nDebit;
+        CAmount nFee = wtx.tx->GetValueOut() - nDebit;
+        
+        if(txsize == 1 && block.IsProofOfWork()){
+            //if the block is pow block ,get address who mined this block from coinbase_tx
+            if (!ExtractDestinations((*tx).vout[0].scriptPubKey, type, addresses, nRequired)) {
+                result.push_back(Pair("minedby","null"));
+            }
+            result.push_back(Pair("minedby",CBitcoinAddress(addresses[0]).ToString()));
+            //the first tx is coinbase,coinbase is not fee
+        }else if(txsize == 2 && block.IsProofOfStake()){
+            //if the block is pos block ,get address who mined this block from coinbase_tx
+            if (!ExtractDestinations((*tx).vout[1].scriptPubKey, type, addresses, nRequired)) {
+                result.push_back(Pair("minedby","null"));
+            }
+            result.push_back(Pair("minedby",CBitcoinAddress(addresses[0]).ToString()));
+             //the first tx is coinbase,coinbase is not fee.
+            sumFee += nFee;
+            break;
+        }else if(block.IsProofOfWork()){
+            sumFee += nFee;
+        }
+        sumNet += nNet;
+    }
+    result.push_back(Pair("amount", ValueFromAmount(sumNet - sumFee)));
+    result.push_back(Pair("fee", ValueFromAmount(sumFee)));
+    result.push_back(Pair("txsize", txsize));
+    result.push_back(Pair("tx", txs));
+    result.push_back(Pair("time", block.GetBlockTime()));
+    result.push_back(Pair("mediantime", (int64_t)blockindex->GetMedianTimePast()));
+    result.push_back(Pair("nonce", (uint64_t)block.nNonce));
+    result.push_back(Pair("bits", strprintf("%08x", block.nBits)));
+    result.push_back(Pair("difficulty", GetDifficulty(blockindex)));
+    result.push_back(Pair("chainwork", blockindex->nChainWork.GetHex()));
+
+    if (blockindex->pprev)
+        result.push_back(Pair("previousblockhash", blockindex->pprev->GetBlockHash().GetHex()));
+    CBlockIndex *pnext = chainActive.Next(blockindex);
+    if (pnext)
+        result.push_back(Pair("nextblockhash", pnext->GetBlockHash().GetHex()));
+    return result;
+}
+
+//godcoin:newrpc
+UniValue listblocks(const JSONRPCRequest& request)
+{
+    CWallet * const pwallet = GetWalletForJSONRPCRequest(request);
+    if (request.fHelp || request.params.size() > 2)
+        throw std::runtime_error(
+            "listblocks ( page length )\n"
+            "\nReturn a length of blocks in the chain, start at start .\n"
+            "\nArguments:\n"
+            "1. page      (numeric, optional) the page of list.\n"
+            "2. \"length\"  (string, optional) the size of page(Default 10 MAX 200).\n"
+            "\nResult:\n"
+            "\n{\n"
+                "\n\"start\": 200,"
+                "\n\"length\": 10,"
+                "\n\"bestblockhash\": \"3febcf854a4b87f9e92cdfa6919a2352c3466d7b59106e6b7bc8dc16a05cfd07\","
+                "\n\"blocks\": [\n"
+                "\n{"
+                    "\n\"hash\": \"557b644f518005ff91be42e35ad1aeac827aa6c5229ef12c36e12effb48c951c\","
+                    "\n\"confirmations\": 3,"
+                    "\n\"height\": 203,"
+                    "\n\"version\": 536870912,"
+                    "\n\"versionHex\": \"20000000\","
+                    "\n\"merkleroot\": \"6c92302ededd37a9daf33b848eef858eddf0d52237a96cdea22844aa12fe8274\","
+                    "\n\"time\": 1513922252,"
+                    "\n\"mediantime\": 1513922251,"
+                    "\n\"nonce\": 1,"
+                    "\n\"bits\": \"207fffff\","
+                    "\n\"difficulty\": 4.656542373906925e-10,"
+                    "\n\"chainwork\": \"0000000000000000000000000000000000000000000000000000006500650133\","
+                    "\n\"previousblockhash\": \"295e99489ca3f94bcf46901ee94e97c375d13736555bad062b3f226083b14bfd\","
+                    "\n\"nextblockhash\": \"0d6a74aba6bc0875d8c68b596e64cc0c90123bea7456beda5425d620dc53d764\""
+                "\n}\n]\n}\n"
+            "\nExamples:\n"
+            + HelpExampleRpc("listblocks", "0")
+            + HelpExampleRpc("listblocks", "0 100")
+        );
+
+    LOCK2(cs_main, pwallet->cs_wallet);//godcoin:lf:advisor listsinceblock LOCK2(cs_main, pwallet->cs_wallet)
+    int page = request.params[0].isNull() ? 0:request.params[0].get_int();
+    int nChainHeight = chainActive.Height();
+    int limit = request.params[1].isNull() ? DEFAULT_LISTBLOCKS_LENGTH:(request.params[1].get_int() > MAX_LISTBLOCKS_LENGTH? MAX_LISTBLOCKS_LENGTH :request.params[1].get_int());
+    int start = 0,end = 0;
+
+    if(limit < 0 || page < 0){
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "error : page(limit) must be positive number");
+    }
+
+    end = nChainHeight - page*limit;
+    if(end > nChainHeight || end < 0){
+        end = nChainHeight;
+    }
+    start = end - limit;
+
+    if(start < 0){
+        start = 0;
+    }
+
+    if(start >= end || start >= nChainHeight) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "error : start > end or start > chainHeiht");
+    }
+
+    UniValue ret(UniValue::VOBJ);
+    ret.push_back(Pair("start", (start+1)));
+    ret.push_back(Pair("end", end));
+    ret.push_back(Pair("height",nChainHeight));
+    ret.push_back(Pair("currentTime",GetAdjustedTime()));
+    ret.push_back(Pair("bestblockhash",chainActive.Tip()->GetBlockHash().GetHex()));
+    UniValue listblock(UniValue::VARR);
+    for(int i = end ; i > start ; i--){
+        CBlock block;
+        CBlockIndex* pblockindex = chainActive[i];
+        if (!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
+            throw JSONRPCError(RPC_MISC_ERROR, "Block not found on disk");
+
+        listblock.push_back(listblockToJSON(block, pblockindex, pwallet));
+    }
+    ret.push_back(Pair("blocks",listblock));        
+    
+    return ret;
+}
+
+//godcoin:pos
+UniValue generatepos(const JSONRPCRequest& request)
+{
+    CWallet * const pwallet = GetWalletForJSONRPCRequest(request);
+
+    if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) {
+        return NullUniValue;
+    }
+    return minePosBlock(pwallet);
+}
 extern UniValue abortrescan(const JSONRPCRequest& request); // in rpcdump.cpp
 extern UniValue dumpprivkey(const JSONRPCRequest& request); // in rpcdump.cpp
 extern UniValue importprivkey(const JSONRPCRequest& request);
@@ -3197,6 +3573,13 @@ static const CRPCCommand commands[] =
     { "wallet",             "walletpassphrasechange",   &walletpassphrasechange,   true,   {"oldpassphrase","newpassphrase"} },
     { "wallet",             "walletpassphrase",         &walletpassphrase,         true,   {"passphrase","timeout"} },
     { "wallet",             "removeprunedfunds",        &removeprunedfunds,        true,   {"txid"} },
+    //godcoin:newrpc
+    { "wallet",             "listblocks",               &listblocks,               true,  {"page","length"} },
+    { "wallet",             "transactionsummary",       &transactionsummary,       true,  {} },
+    { "wallet",             "newlisttransactions",      &newlisttransactions,      false,  {"account","count","skip","include_watchonly"} },
+
+    //godcoin:pos
+    { "generating",         "generatepos",              &generatepos,              true,   {} },
 
     { "generating",         "generate",                 &generate,                 true,   {"nblocks","maxtries"} },
 };

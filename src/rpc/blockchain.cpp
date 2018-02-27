@@ -24,6 +24,9 @@
 #include "util.h"
 #include "utilstrencodings.h"
 #include "hash.h"
+#include "timedata.h"
+#include "base58.h"
+#include "script/standard.h"
 
 #include <stdint.h>
 
@@ -1531,7 +1534,88 @@ UniValue getchaintxstats(const JSONRPCRequest& request)
 
     return ret;
 }
+//godcoin:newrpc
+UniValue recenttxstatistics(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() > 1)
+        throw std::runtime_error(
+            "recentTxStatistics \n"
+            "\nReturn a list of volume of business ,passed daycount days.\n"
+            "\nArguments:\n"
+            "1. daycount      (numeric, optional) day count.\n"
+            "\nResult:\n"
+                "["
+                    "{"
+                        "\"time\":150203132,"
+                        "\"txcount\":100,"
+                        "\"txrate\":1.3"
+                    "}"
+                "]"
+            "\nExamples:\n"
+            + HelpExampleRpc("recentTxStatistics", "")
+            + HelpExampleRpc("recentTxStatistics", "")
+        );
 
+    LOCK(cs_main);
+    int nChainHeight = chainActive.Height();
+    unsigned int currentTime = (GetAdjustedTime() / ONE_DAY_SECONDS) * ONE_DAY_SECONDS;
+    int count = request.params[0].isNull()?14:request.params[0].get_int();
+
+    if(count < 0) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "error : daycount must be positive number");
+    }else if(count > 200) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "error : daycount is too lagre please try again");
+    }
+    UniValue listblock(UniValue::VARR);
+
+    int checkHeight = nChainHeight,i = 0;
+    for(int j = count; j > 0 ; j--){
+        CBlockIndex* endIndex;
+        CBlockIndex* pindexPast;
+        int flagzero = 0;
+        int blockcount = 0;
+        i = checkHeight;
+        for(; i > 0 ; i--){
+            unsigned int currentindexTime = chainActive[i]->nTime;
+            if(currentTime > (ONE_DAY_SECONDS+currentindexTime)){
+                if(flagzero == 1){
+                    blockcount = endIndex->nHeight - i;
+                    checkHeight = i;
+                }else{
+                    flagzero = 0;
+                }
+                break;
+            }
+            if(currentTime < currentindexTime && flagzero == 0)
+            {
+                flagzero = 1;
+                endIndex = chainActive[i];
+            }
+            
+        }
+        if(flagzero){
+            pindexPast = endIndex->GetAncestor(endIndex->nHeight - blockcount);
+        }
+        int nTimeDiff = flagzero?endIndex->GetMedianTimePast() - pindexPast->GetMedianTimePast():0;
+        int nTxDiff = flagzero?endIndex->nChainTx - pindexPast->nChainTx:0;
+
+        UniValue txme(UniValue::VOBJ);
+        txme.push_back(Pair("time", (int64_t)currentTime));
+        txme.push_back(Pair("txcount", (int64_t)nTxDiff));
+        if(nTimeDiff){
+            txme.push_back(Pair("txrate", ((double)nTxDiff) / nTimeDiff));
+        }
+        
+        listblock.push_back(txme);
+        currentTime -= ONE_DAY_SECONDS;
+
+        endIndex = NULL;
+        pindexPast = NULL;
+    }
+            
+    
+    return listblock;
+}
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         okSafe argNames
   //  --------------------- ------------------------  -----------------------  ------ ----------
@@ -1555,7 +1639,8 @@ static const CRPCCommand commands[] =
     { "blockchain",         "verifychain",            &verifychain,            true,  {"checklevel","nblocks"} },
 
     { "blockchain",         "preciousblock",          &preciousblock,          true,  {"blockhash"} },
-
+    //godcoin:newrpc 
+    { "blockchain",         "recenttxstatistics",     &recenttxstatistics,     true,  {"daycount"} },
     /* Not shown in help */
     { "hidden",             "invalidateblock",        &invalidateblock,        true,  {"blockhash"} },
     { "hidden",             "reconsiderblock",        &reconsiderblock,        true,  {"blockhash"} },

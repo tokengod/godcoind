@@ -42,6 +42,7 @@
 #include "versionbits.h"
 #include "warnings.h"
 #include "superblock.h"
+#include "pos/posvalidation.h"
 
 #include <atomic>
 #include <sstream>
@@ -1036,7 +1037,8 @@ bool ReadBlockFromDisk(CBlock& block, const CDiskBlockPos& pos, const Consensus:
     }
 
     // Check the header
-    if (!CheckProofOfWork(block.GetHash(), block.nBits, consensusParams))
+    //godcoin:pos
+    if (!isSuperBlock(block) && block.IsProofOfWork() && !CheckProofOfWork(block.GetHash(), block.nBits, consensusParams))
         return error("ReadBlockFromDisk: Errors in block header at %s", pos.ToString());
 
     return true;
@@ -1060,6 +1062,10 @@ CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
         return 0;
 
     CAmount nSubsidy = 50 * COIN;
+    //godcoin:pos
+    if(GetPosBlockSubsidy(nHeight,consensusParams,nSubsidy))
+        return nSubsidy;
+    
     // Subsidy is cut in half every 210,000 blocks which will occur approximately every 4 years.
     nSubsidy >>= halvings;
     return nSubsidy;
@@ -1072,6 +1078,13 @@ bool IsInitialBlockDownload()
     // Optimization: pre-test latch before taking the lock.
     if (latchToFalse.load(std::memory_order_relaxed))
         return false;
+
+    //godcoin:pos , 
+    //when chainactive height equal to LAST_POW_BLOCK_HEIGHT then IsInitialBlockDownload return false,
+    //for make the node can getheaders
+    if (chainActive.Tip() != nullptr && (chainActive.Tip()->nHeight == LAST_POW_BLOCK_HEIGHT)) {
+        return false;
+    }
 
     LOCK(cs_main);
     if (latchToFalse.load(std::memory_order_relaxed))
@@ -1272,7 +1285,8 @@ void InitScriptExecutionCache() {
  */
 bool CheckInputs(const CTransaction& tx, CValidationState &state, const CCoinsViewCache &inputs, bool fScriptChecks, unsigned int flags, bool cacheSigStore, bool cacheFullScriptStore, PrecomputedTransactionData& txdata, std::vector<CScriptCheck> *pvChecks)
 {
-    if (!tx.IsCoinBase())
+    //godcoin:pos
+    if (!tx.IsCoinBase() &&!tx.IsCoinStake() )
     {
         if (!Consensus::CheckTxInputs(tx, state, inputs, GetSpendHeight(inputs)))
             return false;
@@ -1794,6 +1808,11 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     blockundo.vtxundo.reserve(block.vtx.size() - 1);
     std::vector<PrecomputedTransactionData> txdata;
     txdata.reserve(block.vtx.size()); // Required so that pointers to individual PrecomputedTransactionData don't get invalidated
+    //godcoin:pos
+    CAmount coinstakeIn = 0;
+    if(block.vtx.size() > 1 && block.IsProofOfStake())
+       coinstakeIn = view.GetValueIn(*(block.vtx[1]));
+    
     for (unsigned int i = 0; i < block.vtx.size(); i++)
     {
         const CTransaction &tx = *(block.vtx[i]);
@@ -1830,7 +1849,8 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
                              REJECT_INVALID, "bad-blk-sigops");
 
         txdata.emplace_back(tx);
-        if (!tx.IsCoinBase())
+        //godcoin:pos
+        if (!tx.IsCoinBase() && !tx.IsCoinStake())
         {
             nFees += view.GetValueIn(tx)-tx.GetValueOut();
 
@@ -1855,6 +1875,10 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     LogPrint(BCLog::BENCH, "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs]\n", (unsigned)block.vtx.size(), 0.001 * (nTime3 - nTime2), 0.001 * (nTime3 - nTime2) / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * (nTime3 - nTime2) / (nInputs-1), nTimeConnect * 0.000001);
 
     CAmount blockReward = nFees + GetBlockSubsidy(pindex->nHeight, chainparams.GetConsensus());
+    //godcoin:pos
+    if(!CheckBlockAmount(block,pindex,state,chainparams,blockReward,coinstakeIn))
+        return false;
+    
     if (block.vtx[0]->GetValueOut() > blockReward)
         return state.DoS(100,
                          error("ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d)",
@@ -2851,7 +2875,8 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
     
     // Check that the header is valid (particularly PoW).  This is mostly
     // redundant with the call in AcceptBlockHeader.
-    if (!CheckBlockHeader(block, state, consensusParams, fCheckPOW))
+    //godcoin:pos
+    if (block.IsProofOfWork() &&!CheckBlockHeader(block, state, consensusParams, fCheckPOW))
         return false;
 
     // Check the merkle root.
@@ -2885,6 +2910,10 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
         if (block.vtx[i]->IsCoinBase())
             return state.DoS(100, false, REJECT_INVALID, "bad-cb-multiple", false, "more than one coinbase");
 
+    //godcoin:pos
+    if(block.IsProofOfStake())
+        return CheckPosBlock(block,state);
+    
     // Check transactions
     for (const auto& tx : block.vtx)
         if (!CheckTransaction(*tx, state, false))
@@ -2938,14 +2967,16 @@ void UpdateUncommittedBlockStructures(CBlock& block, const CBlockIndex* pindexPr
     }
 }
 
-std::vector<unsigned char> GenerateCoinbaseCommitment(CBlock& block, const CBlockIndex* pindexPrev, const Consensus::Params& consensusParams)
+//godcoin:pos
+std::vector<unsigned char> GenerateCoinbaseCommitment(CBlock& block, const CBlockIndex* pindexPrev, const Consensus::Params& consensusParams, bool fProofOfStake)
 {
     std::vector<unsigned char> commitment;
     int commitpos = GetWitnessCommitmentIndex(block);
     std::vector<unsigned char> ret(32, 0x00);
     if (consensusParams.vDeployments[Consensus::DEPLOYMENT_SEGWIT].nTimeout != 0) {
         if (commitpos == -1) {
-            uint256 witnessroot = BlockWitnessMerkleRoot(block, nullptr);
+            //godcoin:pos
+            uint256 witnessroot = BlockWitnessMerkleRoot(block, nullptr, &fProofOfStake);
             CHash256().Write(witnessroot.begin(), 32).Write(ret.data(), 32).Finalize(witnessroot.begin());
             CTxOut out;
             out.nValue = 0;
@@ -2977,8 +3008,9 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationSta
 
     // Check proof of work
     const Consensus::Params& consensusParams = params.GetConsensus();
-    if (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams))
-        return state.DoS(100, false, REJECT_INVALID, "bad-diffbits", false, "incorrect proof of work");
+    //godcoin:pos
+    // if (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams))
+    //     return state.DoS(100, false, REJECT_INVALID, "bad-diffbits", false, "incorrect proof of work");
 
     // Check against checkpoints
     if (fCheckpointsEnabled) {
@@ -3011,7 +3043,7 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationSta
 
 static bool ContextualCheckBlock(const CBlock& block, CValidationState& state, const Consensus::Params& consensusParams, const CBlockIndex* pindexPrev)
 {
-    //godcoin:lf merage super_node
+    //godcoin:superblock
     if (isSuperBlock(block))
         return true;
     
@@ -3113,8 +3145,9 @@ static bool AcceptBlockHeader(const CBlockHeader& block, CValidationState& state
             return true;
         }
 
-        if (!CheckBlockHeader(block, state, chainparams.GetConsensus()))
-            return error("%s: Consensus::CheckBlockHeader: %s, %s", __func__, hash.ToString(), FormatStateMessage(state));
+        //godcoin:pos we can not get thisblock is pos or pow,so delete
+        //if (!CheckBlockHeader(block, state, chainparams.GetConsensus()))
+        //    return error("%s: Consensus::CheckBlockHeader: %s, %s", __func__, hash.ToString(), FormatStateMessage(state));
 
         // Get prev block index
         CBlockIndex* pindexPrev = nullptr;
@@ -3141,6 +3174,9 @@ static bool AcceptBlockHeader(const CBlockHeader& block, CValidationState& state
                 }
             }
         }
+        //godcoin:pos
+        if(!AcceptPosBlockHeader(block,state,pindexPrev))
+            return false;
     }
     if (pindex == nullptr)
         pindex = AddToBlockIndex(block);
@@ -3186,6 +3222,10 @@ static bool AcceptBlock(const std::shared_ptr<const CBlock>& pblock, CValidation
     CBlockIndex *&pindex = ppindex ? *ppindex : pindexDummy;
 
     if (!AcceptBlockHeader(block, state, chainparams, &pindex))
+        return false;
+
+    //godcoin:pos
+    if(!AcceptPosBlock(pblock,state,chainparams,ppindex))
         return false;
 
     // Try to process all requested blocks that we don't have, but only
@@ -4101,12 +4141,13 @@ bool LoadExternalBlockFile(const CChainParams& chainparams, FILE* fileIn, CDiskB
                 }
 
                 // Activate the genesis block so normal node progress can continue
-                if (hash == chainparams.GetConsensus().hashGenesisBlock) {
+                //godcoin:pos when reindex this failed
+                //if (hash == chainparams.GetConsensus().hashGenesisBlock) {
                     CValidationState state;
                     if (!ActivateBestChain(state, chainparams)) {
                         break;
                     }
-                }
+                //}
 
                 NotifyHeaderTip();
 

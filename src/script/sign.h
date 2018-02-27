@@ -7,6 +7,7 @@
 #define BITCOIN_SCRIPT_SIGN_H
 
 #include "script/interpreter.h"
+#include "coins.h"
 
 class CKeyID;
 class CKeyStore;
@@ -82,5 +83,9 @@ SignatureData CombineSignatures(const CScript& scriptPubKey, const BaseSignature
 /** Extract signature data from a transaction, and insert it. */
 SignatureData DataFromTransaction(const CMutableTransaction& tx, unsigned int nIn);
 void UpdateTransaction(CMutableTransaction& tx, unsigned int nIn, const SignatureData& data);
+
+//godcoin:pos
+bool VerifySignatureStake(const Coin& coin, const uint256 txFromHash, const CTransaction& txTo, unsigned int nIn, unsigned int flags);
+
 
 #endif // BITCOIN_SCRIPT_SIGN_H

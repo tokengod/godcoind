@@ -30,3 +30,30 @@ std::string CBlock::ToString() const
     }
     return s.str();
 }
+
+//godcoin:pos
+bool CBlock::IsProofOfStake() const{
+    //coinbase needed
+    if(this->vtx.empty() || !this->vtx[0]->IsCoinBase()){
+        return false;
+    }
+
+    //coinbase is emtpy
+    if (this->vtx[0]->vout[0].nValue != 0)
+        return false;
+
+    // Second transaction must be coinstake
+    if (this->vtx.size() < 2 )
+       return false;
+
+    //coinstake vin shouldn't be empty
+    //first vout is empty
+    if(this->vtx[1]->vin.size()>0
+            && (!this->vtx[1]->vin[0].prevout.IsNull())
+            && this->vtx[1]->vout.size() >= 2
+            && this->vtx[1]->vout[0].IsEmpty()){
+        return true;
+    }
+
+    return false;
+}

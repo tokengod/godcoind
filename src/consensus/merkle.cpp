@@ -165,12 +165,33 @@ uint256 BlockMerkleRoot(const CBlock& block, bool* mutated)
     return ComputeMerkleRoot(leaves, mutated);
 }
 
-uint256 BlockWitnessMerkleRoot(const CBlock& block, bool* mutated)
+//godcoin:pos
+uint256 BlockWitnessMerkleRoot(const CBlock& block, bool* mutated, bool* pfProofOfStake)
 {
+    bool fProofOfStake = pfProofOfStake ? *pfProofOfStake : block.IsProofOfStake();
+    //if is pos go to BlockWitnessMerkleRootPOS
+    if (fProofOfStake)
+        return BlockWitnessMerkleRootPOS(block,mutated,pfProofOfStake);
+    
     std::vector<uint256> leaves;
     leaves.resize(block.vtx.size());
     leaves[0].SetNull(); // The witness hash of the coinbase is 0.
     for (size_t s = 1; s < block.vtx.size(); s++) {
+        leaves[s] = block.vtx[s]->GetWitnessHash();
+    }
+    return ComputeMerkleRoot(leaves, mutated);
+}
+
+//godcoin:pos
+uint256 BlockWitnessMerkleRootPOS(const CBlock& block, bool* mutated, bool* pfProofOfStake){
+    bool fProofOfStake = pfProofOfStake ? *pfProofOfStake : block.IsProofOfStake();
+    std::vector<uint256> leaves;
+    leaves.resize(block.vtx.size());
+    leaves[0].SetNull(); // The witness hash of the coinbase is 0.
+    if(fProofOfStake){
+        leaves[1].SetNull(); // The witness hash of the coinstake is 0.
+    }
+    for (size_t s = 1 + (fProofOfStake ? 1 : 0); s < block.vtx.size(); s++) {
         leaves[s] = block.vtx[s]->GetWitnessHash();
     }
     return ComputeMerkleRoot(leaves, mutated);

@@ -66,6 +66,20 @@ public:
     {
         return (int64_t)nTime;
     }
+
+    //godcoin:pos
+    CBlockHeader& operator=(const CBlockHeader& other) {
+        if (this != &other)
+        {
+            this->nVersion       = other.nVersion;
+            this->hashPrevBlock  = other.hashPrevBlock;
+            this->hashMerkleRoot = other.hashMerkleRoot;
+            this->nTime          = other.nTime;
+            this->nBits          = other.nBits;
+            this->nNonce         = other.nNonce;
+        }
+        return *this;
+    }
 };
 
 
@@ -74,7 +88,8 @@ class CBlock : public CBlockHeader
 public:
     // network and disk
     std::vector<CTransactionRef> vtx;
-
+    //godcoin:pos
+    std::vector<unsigned char> vchBlockSig;
     // memory only
     mutable bool fChecked;
 
@@ -95,12 +110,18 @@ public:
     inline void SerializationOp(Stream& s, Operation ser_action) {
         READWRITE(*(CBlockHeader*)this);
         READWRITE(vtx);
+        //godcoin:pos
+        if(IsProofOfStake()){
+            READWRITE(vchBlockSig);
+        }
     }
 
     void SetNull()
     {
         CBlockHeader::SetNull();
         vtx.clear();
+        //godcoin:pos
+        vchBlockSig.clear();
         fChecked = false;
     }
 
@@ -114,6 +135,20 @@ public:
         block.nBits          = nBits;
         block.nNonce         = nNonce;
         return block;
+    }
+    //godcoin:pos
+    bool IsProofOfStake() const;
+    //godcoin:pos
+    bool IsProofOfWork() const{
+        return !IsProofOfStake();
+    }
+    //godcoin:pos
+    uint32_t StakeTime() const{
+        uint32_t ret = 0;
+        if(IsProofOfStake()){
+            ret = nTime;
+        }
+        return ret;
     }
 
     std::string ToString() const;

@@ -26,6 +26,7 @@
 #include "util.h"
 #include "utilmoneystr.h"
 #include "validationinterface.h"
+#include "pos/pos.h"
 
 #include <algorithm>
 #include <queue>
@@ -166,7 +167,8 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     coinbaseTx.vout[0].nValue = nFees + GetBlockSubsidy(nHeight, chainparams.GetConsensus());
     coinbaseTx.vin[0].scriptSig = CScript() << nHeight << OP_0;
     pblock->vtx[0] = MakeTransactionRef(std::move(coinbaseTx));
-    pblocktemplate->vchCoinbaseCommitment = GenerateCoinbaseCommitment(*pblock, pindexPrev, chainparams.GetConsensus());
+    //godcoin:pos
+    pblocktemplate->vchCoinbaseCommitment = GenerateCoinbaseCommitment(*pblock, pindexPrev, chainparams.GetConsensus(),false);
     pblocktemplate->vTxFees[0] = -nFees;
 
     LogPrintf("CreateNewBlock(): block weight: %u txs: %u fees: %ld sigops %d\n", GetBlockWeight(*pblock), nBlockTx, nFees, nBlockSigOpsCost);
@@ -182,6 +184,212 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     if (!TestBlockValidity(state, chainparams, *pblock, pindexPrev, false, false)) {
         throw std::runtime_error(strprintf("%s: TestBlockValidity failed: %s", __func__, FormatStateMessage(state)));
     }
+    int64_t nTime2 = GetTimeMicros();
+
+    LogPrint(BCLog::BENCH, "CreateNewBlock() packages: %.2fms (%d packages, %d updated descendants), validity: %.2fms (total %.2fms)\n", 0.001 * (nTime1 - nTimeStart), nPackagesSelected, nDescendantsUpdated, 0.001 * (nTime2 - nTime1), 0.001 * (nTime2 - nTimeStart));
+
+    return std::move(pblocktemplate);
+}
+
+//godcoin:pos
+std::unique_ptr<CBlockTemplate> BlockAssembler::CreateEmptyBlock(const CScript& scriptPubKeyIn, int64_t* pTotalFees, int32_t nTime){
+    resetBlock();
+
+    //init block
+    pblocktemplate.reset(new CBlockTemplate());
+
+    if(!pblocktemplate.get())
+        return nullptr;
+    pblock = &pblocktemplate->block; // pointer for convenience
+
+    // Add dummy coinbase tx as first transaction
+    pblock->vtx.emplace_back();
+
+    // Add dummy coinstake tx as second transaction
+    pblock->vtx.emplace_back();
+    
+    // Add dummy coinstake tx as second transaction
+    pblocktemplate->vTxFees.push_back(-1); // updated at end
+    pblocktemplate->vTxSigOpsCost.push_back(-1); // updated at end
+
+    //the best chain height
+    LOCK2(cs_main, mempool.cs);
+    CBlockIndex* pindexPrev = chainActive.Tip();
+
+    //set new block height
+    nHeight = pindexPrev->nHeight + 1;
+
+    //block version
+    pblock->nVersion = ComputeBlockVersion(pindexPrev, chainparams.GetConsensus());
+
+    //set nTime, mask is 16s
+    uint32_t txProofTime = nTime == 0 ? GetAdjustedTime() : nTime;
+    txProofTime &= ~STAKE_TIMESTAMP_MASK;
+    pblock->nTime = txProofTime;
+
+    const int64_t nMedianTimePast = pindexPrev->GetMedianTimePast();
+
+    //pow origin
+    nLockTimeCutoff = (STANDARD_LOCKTIME_VERIFY_FLAGS & LOCKTIME_MEDIAN_TIME_PAST)
+                      ? nMedianTimePast
+                      : pblock->GetBlockTime();
+
+
+    nLastBlockTx = nBlockTx;
+    nLastBlockWeight = nBlockWeight;
+    //nLastBlockSize = nBlockSize;
+
+    // Create coinbase transaction.
+    CMutableTransaction coinbaseTx;
+    //vin empty
+    coinbaseTx.vin.resize(1);
+    coinbaseTx.vin[0].prevout.SetNull();
+    //vout empty
+    coinbaseTx.vout.resize(1);
+    // Make the coinbase tx empty in case of proof of stake
+    coinbaseTx.vout[0].SetEmpty();
+
+    //signature
+    coinbaseTx.vin[0].scriptSig = CScript() << nHeight << OP_0;
+    //originalRewardTx = coinbaseTx;
+
+    // add into block
+    pblock->vtx[0] = MakeTransactionRef(std::move(coinbaseTx));
+
+    // Create coinstake transaction.
+    CMutableTransaction coinstakeTx;
+    coinstakeTx.vout.resize(2);
+    coinstakeTx.vout[0].SetEmpty();
+    coinstakeTx.vout[1].scriptPubKey = scriptPubKeyIn;
+    //originalRewardTx = coinstakeTx;
+    //put into block
+    pblock->vtx[1] = MakeTransactionRef(std::move(coinstakeTx));
+
+    //this just makes CBlock::IsProofOfStake to return true
+    //real prevoutstake info is filled in later in SignBlock
+    //pblock->prevoutStake.n=0;
+
+    //pow origin
+    pblocktemplate->vchCoinbaseCommitment = GenerateCoinbaseCommitment(*pblock, pindexPrev, chainparams.GetConsensus(), true);
+    pblocktemplate->vTxFees[0] = -nFees;
+
+    // The total fee is the Fees minus the Refund
+    if (pTotalFees)
+        *pTotalFees = nFees;
+
+    // prev block hash
+    pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
+
+    //
+    pblock->nBits          = GetNextPosWorkRequired(pindexPrev, pblock, chainparams.GetConsensus());
+
+    //
+    pblock->nNonce         = 0;
+    pblocktemplate->vTxSigOpsCost[0] = WITNESS_SCALE_FACTOR * GetLegacySigOpCount(*pblock->vtx[0]);
+
+    return std::move(pblocktemplate);
+}
+
+std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewPosBlock(const CScript& scriptPubKeyIn, bool fProofOfStake, 
+                        int64_t* pTotalFees, int32_t txProofTime, int32_t nTimeLimit){
+    int64_t nTimeStart = GetTimeMicros();
+
+    resetBlock();
+
+    pblocktemplate.reset(new CBlockTemplate());
+
+    if(!pblocktemplate.get())
+        return nullptr;
+    pblock = &pblocktemplate->block; // pointer for convenience
+
+    // Add dummy coinbase tx as first transaction
+    pblock->vtx.emplace_back();
+
+    // Add dummy coinstake tx as second transaction
+    pblock->vtx.emplace_back();
+
+    pblocktemplate->vTxFees.push_back(-1); // updated at end
+    pblocktemplate->vTxSigOpsCost.push_back(-1); // updated at end
+
+    LOCK2(cs_main, mempool.cs);
+    CBlockIndex* pindexPrev = chainActive.Tip();
+    nHeight = pindexPrev->nHeight + 1;
+
+    pblock->nVersion = ComputeBlockVersion(pindexPrev, chainparams.GetConsensus());
+    // -regtest only: allow overriding block.nVersion with
+    // -blockversion=N to test forking scenarios
+    if (chainparams.MineBlocksOnDemand())
+        pblock->nVersion = gArgs.GetArg("-blockversion", pblock->nVersion);
+
+    if(txProofTime == 0) {
+        txProofTime = GetAdjustedTime();
+    }
+    if(fProofOfStake)
+        txProofTime &= ~STAKE_TIMESTAMP_MASK;
+    pblock->nTime = txProofTime;
+    pblock->nBits = GetNextPosWorkRequired(pindexPrev, pblock, chainparams.GetConsensus());
+
+
+    const int64_t nMedianTimePast = pindexPrev->GetMedianTimePast();
+    nLockTimeCutoff = (STANDARD_LOCKTIME_VERIFY_FLAGS & LOCKTIME_MEDIAN_TIME_PAST)
+                       ? nMedianTimePast
+                       : pblock->GetBlockTime();
+
+    // // Decide whether to include witness transactions
+    // // This is only needed in case the witness softfork activation is reverted
+    // // (which would require a very deep reorganization) or when
+    // // -promiscuousmempoolflags is used.
+    // // TODO: replace this with a call to main to assess validity of a mempool
+    // // transaction (which in most cases can be a no-op).
+    fIncludeWitness = IsWitnessEnabled(pindexPrev, chainparams.GetConsensus());
+
+
+    int64_t nTime1 = GetTimeMicros();
+
+    nLastBlockTx = nBlockTx;
+    nLastBlockWeight = nBlockWeight;
+
+    // Create coinbase transaction.
+    CMutableTransaction coinbaseTx;
+    coinbaseTx.vin.resize(1);
+    coinbaseTx.vin[0].prevout.SetNull();
+    coinbaseTx.vout.resize(1);
+    coinbaseTx.vout[0].SetEmpty();
+    coinbaseTx.vin[0].scriptSig = CScript() << nHeight << OP_0;
+    pblock->vtx[0] = MakeTransactionRef(std::move(coinbaseTx));
+
+    // Create coinstake transaction.
+    CMutableTransaction coinstakeTx;
+    coinstakeTx.vout.resize(2);
+    coinstakeTx.vout[0].SetEmpty();
+    coinstakeTx.vout[1].scriptPubKey = scriptPubKeyIn;
+    //originalRewardTx = coinstakeTx;
+    pblock->vtx[1] = MakeTransactionRef(std::move(coinstakeTx));
+
+    //add tx into block
+    int nPackagesSelected = 0;
+    int nDescendantsUpdated = 0;
+    addPackageTxs(nPackagesSelected, nDescendantsUpdated);
+
+    pblocktemplate->vchCoinbaseCommitment = GenerateCoinbaseCommitment(*pblock, pindexPrev, chainparams.GetConsensus(),true);
+    pblocktemplate->vTxFees[0] = -nFees;
+
+    LogPrintf("CreateNewBlock(): block weight: %u txs: %u fees: %ld sigops %d\n", GetBlockWeight(*pblock), nBlockTx, nFees, nBlockSigOpsCost);
+
+    // The total fee is the Fees minus the Refund
+    if (pTotalFees)
+        *pTotalFees = nFees;
+
+    // Fill in header
+    pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
+    pblock->nNonce         = 0;
+    pblocktemplate->vTxSigOpsCost[0] = WITNESS_SCALE_FACTOR * GetLegacySigOpCount(*pblock->vtx[0]);
+
+
+    // CValidationState state;
+    // if (!TestBlockValidity(state, chainparams, *pblock, pindexPrev, false, false)) {
+    //     throw std::runtime_error(strprintf("%s: TestBlockValidity failed: %s", __func__, FormatStateMessage(state)));
+    // }
     int64_t nTime2 = GetTimeMicros();
 
     LogPrint(BCLog::BENCH, "CreateNewBlock() packages: %.2fms (%d packages, %d updated descendants), validity: %.2fms (total %.2fms)\n", 0.001 * (nTime1 - nTimeStart), nPackagesSelected, nDescendantsUpdated, 0.001 * (nTime2 - nTime1), 0.001 * (nTime2 - nTimeStart));

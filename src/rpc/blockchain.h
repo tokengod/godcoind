@@ -33,5 +33,11 @@ UniValue mempoolToJSON(bool fVerbose = false);
 /** Block header to JSON */
 UniValue blockheaderToJSON(const CBlockIndex* blockindex);
 
+/**Godcoin newrpc listBlock description to JSON**/
+UniValue listblockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool txDetails = false);
+static const int DEFAULT_LISTBLOCKS_LENGTH= 10;
+static const int MAX_LISTBLOCKS_LENGTH = 100;
+static const unsigned int ONE_DAY_SECONDS = 86400;//86400 = 60*60*24
+
 #endif
 

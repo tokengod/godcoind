@@ -421,3 +421,17 @@ bool DummySignatureCreator::CreateSig(std::vector<unsigned char>& vchSig, const 
     vchSig[6 + 33 + 32] = SIGHASH_ALL | SIGHASH_FORKID;
     return true;
 }
+
+//godcoin:pos
+bool VerifySignatureStake(const Coin& coin, const uint256 txFromHash, const CTransaction& txTo, unsigned int nIn, unsigned int flags)
+{
+    TransactionSignatureChecker checker(&txTo, nIn, 0);
+	
+    const CTxIn& txin = txTo.vin[nIn];
+    const CTxOut& txout = coin.out;
+
+    if (txin.prevout.hash != txFromHash)
+        return false;
+		
+    return VerifyScript(txin.scriptSig, txout.scriptPubKey, NULL, flags, checker);
+}

@@ -219,6 +219,14 @@ public:
     //! (memory only) Maximum nTime in the chain upto and including this block.
     unsigned int nTimeMax;
 
+    //godcoin:pos
+    //stake modifier
+    uint256 nStakeModifier;
+    //kenel hash
+    uint256 hashProof;
+    //prevout transaction
+    COutPoint prevoutStake;
+
     void SetNull()
     {
         phashBlock = nullptr;
@@ -240,6 +248,11 @@ public:
         nTime          = 0;
         nBits          = 0;
         nNonce         = 0;
+
+        //gdocoin:pos
+        nStakeModifier = uint256();
+        hashProof = uint256();
+        prevoutStake.SetNull();
     }
 
     CBlockIndex()
@@ -256,6 +269,11 @@ public:
         nTime          = block.nTime;
         nBits          = block.nBits;
         nNonce         = block.nNonce;
+
+        //godcoin:pos
+        nStakeModifier = uint256();
+        hashProof = uint256(); 
+        prevoutStake.SetNull();
     }
 
     CDiskBlockPos GetBlockPos() const {
@@ -320,12 +338,24 @@ public:
         return pbegin[(pend - pbegin)/2];
     }
 
+    //godcoin:pos
+    bool IsProofOfWork() const // qtum
+    {
+       return !IsProofOfStake();
+    }
+
+    bool IsProofOfStake() const
+    {
+       return !prevoutStake.IsNull();
+    }
+    
     std::string ToString() const
     {
-        return strprintf("CBlockIndex(pprev=%p, nHeight=%d, merkle=%s, hashBlock=%s)",
+        return strprintf("CBlockIndex(pprev=%p, nHeight=%d, merkle=%s, hashBlock=%s,nNonce=%d)",
             pprev, nHeight,
             hashMerkleRoot.ToString(),
-            GetBlockHash().ToString());
+            GetBlockHash().ToString(),
+            nNonce);
     }
 
     //! Check whether this block index entry is valid up to the passed validity level.
@@ -405,6 +435,11 @@ public:
         READWRITE(nTime);
         READWRITE(nBits);
         READWRITE(nNonce);
+
+        //godcoin:pos
+        READWRITE(nStakeModifier);
+        READWRITE(hashProof);
+        READWRITE(prevoutStake);
     }
 
     uint256 GetBlockHash() const

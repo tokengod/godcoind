@@ -159,6 +159,15 @@ public:
     {
         return (nValue == -1);
     }
+    //godcoin:pos
+    void SetEmpty(){
+        nValue = 0;
+        scriptPubKey.clear();
+    }
+    //godcoin:pos
+    bool IsEmpty() const{
+        return (nValue == 0 && scriptPubKey.empty());
+    }
 
     friend bool operator==(const CTxOut& a, const CTxOut& b)
     {
@@ -343,6 +352,17 @@ public:
     friend bool operator!=(const CTransaction& a, const CTransaction& b)
     {
         return a.hash != b.hash;
+    }
+    
+    //godcoin:pos
+    bool IsCoinStake() const{
+        // ppcoin: the coin stake transaction is marked with the first output empty
+        return (vin.size() > 0 && (!vin[0].prevout.IsNull()) && vout.size() >= 2 && vout[0].IsEmpty());
+    }
+
+    bool IsNormalTx() const{
+        // not coin base or coin stake transaction
+        return !IsCoinBase() && !IsCoinStake();
     }
 
     std::string ToString() const;
