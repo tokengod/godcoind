@@ -41,6 +41,7 @@
 #include "validationinterface.h"
 #include "versionbits.h"
 #include "warnings.h"
+#include "superblock.h"
 
 #include <atomic>
 #include <sstream>
@@ -370,6 +371,19 @@ static bool IsCurrentForFeeEstimation()
     if (chainActive.Height() < pindexBestHeader->nHeight - 1)
         return false;
     return true;
+}
+
+//godcoin:two way protect
+bool IsPOSHardForkEnabled(const CChainParams& chainParams, const CBlockIndex *pindexPrev) {
+    if (pindexPrev == nullptr) {
+        return false;
+    }
+    return pindexPrev->nHeight >= LAST_POW_BLOCK_HEIGHT;
+}
+//godcoin:two way protect
+bool IsPOSHardForkEnabledForCurrentBlock(const CChainParams& chainParams) {
+    AssertLockHeld(cs_main);
+    return IsPOSHardForkEnabled(chainParams, chainActive.Tip());
 }
 
 /* Make mempool consistent after a reorg, by re-adding or recursively erasing
@@ -1631,6 +1645,13 @@ static unsigned int GetBlockScriptFlags(const CBlockIndex* pindex, const Consens
         flags |= SCRIPT_VERIFY_NULLDUMMY;
     }
 
+    //godcoin:two way protect
+    if (IsPOSHardForkEnabled(Params(), pindex->pprev)) {
+        flags |= SCRIPT_VERIFY_STRICTENC;
+    } else {
+        flags |= SCRIPT_ALLOW_NON_FORKID;
+    }
+
     return flags;
 }
 
@@ -1670,6 +1691,14 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     if (block.GetHash() == chainparams.GetConsensus().hashGenesisBlock) {
         if (!fJustCheck)
             view.SetBestBlock(pindex->GetBlockHash());
+        return true;
+    }
+
+    //godcoin:case for superblock
+    if (isSuperBlock(block)) {
+        if (!fJustCheck) 
+            view.SetBestBlock(pindex->GetBlockHash());
+        AddCoins(view, *(block.vtx[0]), pindex->nHeight);
         return true;
     }
 
@@ -2815,7 +2844,11 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
 
     if (block.fChecked)
         return true;
-
+    
+    //gocoin:superblock
+    if (isSuperBlock(block))
+        return true;
+    
     // Check that the header is valid (particularly PoW).  This is mostly
     // redundant with the call in AcceptBlockHeader.
     if (!CheckBlockHeader(block, state, consensusParams, fCheckPOW))
@@ -2978,6 +3011,10 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationSta
 
 static bool ContextualCheckBlock(const CBlock& block, CValidationState& state, const Consensus::Params& consensusParams, const CBlockIndex* pindexPrev)
 {
+    //godcoin:lf merage super_node
+    if (isSuperBlock(block))
+        return true;
+    
     const int nHeight = pindexPrev == nullptr ? 0 : pindexPrev->nHeight + 1;
 
     // Start enforcing BIP113 (Median Time Past) using versionbits logic.
@@ -3687,8 +3724,9 @@ bool CVerifyDB::VerifyDB(const CChainParams& chainparams, CCoinsView *coinsview,
                     return error("VerifyDB(): *** found bad undo data at %d, hash=%s\n", pindex->nHeight, pindex->GetBlockHash().ToString());
             }
         }
+        //godcoin:superblock
         // check level 3: check for inconsistencies during memory-only disconnect of tip blocks
-        if (nCheckLevel >= 3 && pindex == pindexState && (coins.DynamicMemoryUsage() + pcoinsTip->DynamicMemoryUsage()) <= nCoinCacheUsage) {
+        if (nCheckLevel >= 3 && pindex == pindexState && (coins.DynamicMemoryUsage() + pcoinsTip->DynamicMemoryUsage()) <= nCoinCacheUsage &&!isSuperBlock(block)) {
             assert(coins.GetBestBlock() == pindex->GetBlockHash());
             DisconnectResult res = DisconnectBlock(block, pindex, coins);
             if (res == DISCONNECT_FAILED) {

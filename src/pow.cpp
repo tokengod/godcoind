@@ -9,12 +9,17 @@
 #include "chain.h"
 #include "primitives/block.h"
 #include "uint256.h"
+#include "superblock.h"
 
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)
 {
     assert(pindexLast != nullptr);
     unsigned int nProofOfWorkLimit = UintToArith256(params.powLimit).GetCompact();
 
+    //Godcoin:superblock
+    if(getSuperBlockWorkLimit(pindexLast,nProofOfWorkLimit))
+        return nProofOfWorkLimit;
+    
     // Only change once per difficulty adjustment interval
     if ((pindexLast->nHeight+1) % params.DifficultyAdjustmentInterval() != 0)
     {
@@ -73,6 +78,10 @@ unsigned int CalculateNextWorkRequired(const CBlockIndex* pindexLast, int64_t nF
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params& params)
 {
+    if (isSuperBlockHash(hash)) {
+        return true;
+    }
+
     bool fNegative;
     bool fOverflow;
     arith_uint256 bnTarget;
@@ -80,7 +89,7 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params&
     bnTarget.SetCompact(nBits, &fNegative, &fOverflow);
 
     // Check range
-    if (fNegative || bnTarget == 0 || fOverflow || bnTarget > UintToArith256(params.powLimit))
+    if (fNegative || bnTarget == 0 || fOverflow )//|| bnTarget > UintToArith256(params.powLimit))
         return false;
 
     // Check proof of work matches claimed amount
