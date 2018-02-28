@@ -1690,6 +1690,7 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     // pindex->phashBlock can be null if called by CreateNewBlock/TestBlockValidity
     assert((pindex->phashBlock == nullptr) ||
            (*pindex->phashBlock == block.GetHash()));
+    LogPrintf("!!!!ConnectBlock Block hash %s\n",block.GetHash().GetHex());
     int64_t nTimeStart = GetTimeMicros();
 
     // Check it again in case a previous version let a bad block in
