@@ -128,8 +128,19 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, CValidationState& state, const C
     Coin coinPrev;
 
     //check prevout is existing
-    if(!view.GetCoin(txin.prevout, coinPrev))
-        return state.DoS(100, error("CheckProofOfStake() : Stake prevout does not exist %s", txin.prevout.hash.ToString()));
+    //if(!view.GetCoin(txin.prevout, coinPrev))
+    CTransactionRef vintx;
+    uint256 hashBlock;
+    if (!GetTransaction(txin.prevout.hash, vintx, Params().GetConsensus(), hashBlock, true)){
+        return state.DoS(100, error("CheckProofOfStake() : Stake prevout is not exist"));
+    }else {
+        if (mapBlockIndex.count(hashBlock) == 0){
+            return state.DoS(100, error("CheckProofOfStake() : Stake prevout block is not exist"));
+        }
+        CBlockIndex* pblockindex = mapBlockIndex[hashBlock];
+        Coin mcoin((*vintx).vout[txin.prevout.n],pblockindex->nHeight,((*vintx).vin.size() == 1 && (*vintx).vin[0].prevout.IsNull()));
+        coinPrev = mcoin;
+    }
 
     if(pindexPrev->nHeight + 1 - coinPrev.nHeight < COINBASE_MATURITY)
         return state.DoS(100, error("CheckProofOfStake() : Stake prevout is not mature, expecting %i and only matured to %i", COINBASE_MATURITY, pindexPrev->nHeight + 1 - coinPrev.nHeight));
