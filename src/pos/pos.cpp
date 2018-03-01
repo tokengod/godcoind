@@ -76,7 +76,7 @@ bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t 
     // Weighted target
     int64_t nValueIn = prevoutValue;
     arith_uint256 bnWeight = arith_uint256(nValueIn);
-    //bnTarget *= bnWeight;
+    bnTarget *= bnWeight;
     targetProofOfStake = ArithToUint256(bnTarget);
     //gocoin:pos nNonce
     int32_t nStakeModifier = 0;
@@ -122,27 +122,16 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, CValidationState& state, const C
         return error("CheckProofOfStake() : called on non-coinstake %s", tx.GetHash().ToString());
 
     //get prevout Tx
-    // Kernel (input 0) must match the stake hash target (nBits)
     const CTxIn& txin = tx.vin[0];
 
     Coin coinPrev;
 
     //check prevout is existing
-    //if(!view.GetCoin(txin.prevout, coinPrev))
-    CTransactionRef vintx;
-    uint256 hashBlock;
-    if (!GetTransaction(txin.prevout.hash, vintx, Params().GetConsensus(), hashBlock, true)){
+    if(!view.GetCoin(txin.prevout, coinPrev)){
         LogPrintf("!!!!!!!!!!!CheckProofOfStake() : Stake prevout is not exist txid:%s\n",txin.prevout.hash.GetHex());
         return state.DoS(100, error("CheckProofOfStake() : Stake prevout is not exist"));
-    }else {
-        if (mapBlockIndex.count(hashBlock) == 0){
-            LogPrintf("!!!!!!!!!!!CheckProofOfStake() : Stake block is not exist hashblock:%s\n",hashBlock.GetHex());
-            return state.DoS(100, error("CheckProofOfStake() : Stake prevout block is not exist"));
-        }
-        CBlockIndex* pblockindex = mapBlockIndex[hashBlock];
-        Coin mcoin((*vintx).vout[txin.prevout.n],pblockindex->nHeight,((*vintx).vin.size() == 1 && (*vintx).vin[0].prevout.IsNull()));
-        coinPrev = mcoin;
     }
+
     
     if(pindexPrev->nHeight + 1 - coinPrev.nHeight < COINBASE_MATURITY){
         LogPrintf("!!!!!!!!!!!CheckProofOfStake() : Stake prevout is not mature, expecting %i and only matured to %i", COINBASE_MATURITY, pindexPrev->nHeight + 1 - coinPrev.nHeight);
