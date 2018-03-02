@@ -969,10 +969,6 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFlushOnClose)
             wtx.fFromMe = wtxIn.fFromMe;
             fUpdated = true;
         }
-        if(fUpdated && wtx.IsCoinStake())
-        {
-            AddToSpends(hash);
-        }
         // If we have a witness-stripped version of this transaction, and we
         // see a new version with a witness, then we must be upgrading a pre-segwit
         // wallet.  Store the new version of the transaction with the witness,
@@ -1151,16 +1147,16 @@ void CWallet::DisableTransaction(const CTransaction &tx)
     if(AbandonTransaction(hash))
     {
         RemoveFromSpends(hash);
-        std::set<CWalletTx*> setCoins;
-        for(const CTxIn& txin: tx.vin)
-        {
-            CWalletTx &coin = mapWallet[txin.prevout.hash];
-            coin.BindWallet(this);
-            NotifyTransactionChanged(this, coin.GetHash(), CT_UPDATED);
-        }
-        CWalletTx& wtx = mapWallet[hash];
-        wtx.BindWallet(this);
-        NotifyTransactionChanged(this, hash, CT_DELETED);
+//        std::set<CWalletTx*> setCoins;
+//        for(const CTxIn& txin: tx.vin)
+//        {
+//            CWalletTx &coin = mapWallet[txin.prevout.hash];
+//            coin.BindWallet(this);
+//            NotifyTransactionChanged(this, coin.GetHash(), CT_UPDATED);
+//        }
+//        CWalletTx& wtx = mapWallet[hash];
+//        wtx.BindWallet(this);
+//        NotifyTransactionChanged(this, hash, CT_DELETED);
     }
 }
 
