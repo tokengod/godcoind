@@ -60,10 +60,10 @@
 
 typedef std::vector<unsigned char> valtype;
 
-/**compute and check pos block important parameter**/
-static bool UpdateHashProof(const CBlock& block, CValidationState& state, const Consensus::Params& consensusParams, CBlockIndex* pindex, CCoinsViewCache& view){
+bool CheckKernelAndUpdateHashProof(const CBlock& block, CValidationState& state, const Consensus::Params& consensusParams,
+                                          CBlockIndex* pindex, CCoinsViewCache& view, uint256& hashProofOfStake){
     uint256 hash = block.GetHash();
- 
+
     // Check coinstake timestamp
     if (block.IsProofOfStake() && !CheckCoinStakeTimestamp(block.GetBlockTime()))
         return state.DoS(50, error("UpdateHashProof() : coinstake timestamp violation nTimeBlock=%d", block.GetBlockTime()));
@@ -81,22 +81,50 @@ static bool UpdateHashProof(const CBlock& block, CValidationState& state, const 
             return state.DoS(100, false, REJECT_INVALID, "bad-diffbits", false, "incorrect proof of work");
     }
 
-    uint256 hashProof;
     // Verify hash target and signature of coinstake tx
     if (block.IsProofOfStake()){
         uint256 targetProofOfStake;
-        if (!CheckProofOfStake(pindex->pprev, state, *block.vtx[1], block.nBits, block.nTime, hashProof, targetProofOfStake, view))
+        if (!CheckProofOfStake(pindex->pprev, state, *block.vtx[1], block.nBits, block.nTime, hashProofOfStake, targetProofOfStake, view))
             return error("UpdateHashProof() : check proof-of-stake failed for block %s", hash.ToString());
+
+        if(hashProofOfStake.IsNull()){
+            return error("CheckProofOfStake get hash proof is null");
+        }
     }
-    
-    // PoW is checked in CheckBlock()
-    if (block.IsProofOfWork())
-        hashProof = block.GetHash();
-    
-    // Record proof hash value
-    pindex->hashProof = hashProof;
+
     return true;
 }
+
+/**compute and check pos block important parameter**/
+static bool UpdateHashProof(const CBlock& block, CValidationState& state, const Consensus::Params& consensusParams, CBlockIndex* pindex, CCoinsViewCache& view){
+    uint256 hash = block.GetHash();
+
+    // Check coinstake timestamp
+    if (block.IsProofOfStake() && !CheckCoinStakeTimestamp(block.GetBlockTime()))
+        return state.DoS(50, error("UpdateHashProof() : coinstake timestamp violation nTimeBlock=%d", block.GetBlockTime()));
+
+    // Check proof-of-work or proof-of-stake
+    if(block.IsProofOfStake()){
+        if (block.nBits != GetNextPosWorkRequired(pindex->pprev, &block, consensusParams))
+            return state.DoS(100, false, REJECT_INVALID, "bad-diffbits", false, "incorrect proof of work");
+    } else if (!isSuperBlock(block)) {
+        /**
+         * If block is GenesisBlock when bitcoind -reindex,GetNextWorkRequired will push a exception in Assert(pindexLast != nullptr).
+         * Because,GenesisBlock haven't prevBlock。So,add check if the block is GenesisBlock
+         * */
+        if (hash != consensusParams.hashGenesisBlock && block.nBits != GetNextWorkRequired(pindex->pprev, &block, consensusParams))
+            return state.DoS(100, false, REJECT_INVALID, "bad-diffbits", false, "incorrect proof of work");
+    }
+
+    // PoW is checked in CheckBlock()
+    if (block.IsProofOfWork()){
+        // Record proof hash value
+        pindex->hashProof = block.GetHash();
+    }
+
+    return true;
+}
+
 // Compute at which vout of the block's coinbase transaction the witness
 // commitment occurs, or -1 if not found.
 //the function same as GetWitnessCommitmentIndex in validation.cpp

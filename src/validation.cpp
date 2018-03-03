@@ -1813,6 +1813,13 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     if(block.vtx.size() > 1 && block.IsProofOfStake())
        coinstakeIn = view.GetValueIn(*(block.vtx[1]));
     
+    //godcoin:pos check kernel hash and update hash proof
+    uint256 hashProof;
+    if(block.IsProofOfStake()
+            &&!CheckKernelAndUpdateHashProof(block, state, chainparams.GetConsensus(), pindex, view, hashProof)){
+        LogPrintf("CheckKernelAndUpdateHashProof Failed:%s\n", state.GetRejectReason());
+    }
+
     for (unsigned int i = 0; i < block.vtx.size(); i++)
     {
         const CTransaction &tx = *(block.vtx[i]);
@@ -1893,8 +1900,8 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     if (fJustCheck)
         return true;
 
-    // Write undo information to disk
-    if (pindex->GetUndoPos().IsNull() || !pindex->IsValid(BLOCK_VALID_SCRIPTS))
+    // Write undo information to disk //godcoin:update poshashproof
+    if (pindex->GetUndoPos().IsNull() || !pindex->IsValid(BLOCK_VALID_SCRIPTS) ||pindex->hashProof.IsNull())
     {
         if (pindex->GetUndoPos().IsNull()) {
             CDiskBlockPos _pos;
@@ -1902,6 +1909,11 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
                 return error("ConnectBlock(): FindUndoPos failed");
             if (!UndoWriteToDisk(blockundo, _pos, pindex->pprev->GetBlockHash(), chainparams.MessageStart()))
                 return AbortNode(state, "Failed to write undo data");
+
+            //godcoin:update poshashproof
+            if(pindex->hashProof.IsNull()){
+                pindex->hashProof = hashProof;
+            }
 
             // update nUndoPos in block index
             pindex->nUndoPos = _pos.nPos;

@@ -978,6 +978,12 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFlushOnClose)
             wtx.SetTx(wtxIn.tx);
             fUpdated = true;
         }
+
+        //godcoin:pos when coinstake which is disconnected connected again,spend it's vin
+        if(fUpdated && wtx.IsCoinStake())
+        {
+            AddToSpends(hash);
+        }
     }
 
     //// debug print
@@ -1104,6 +1110,51 @@ bool CWallet::TransactionCanBeAbandoned(const uint256& hashTx) const
     LOCK2(cs_main, cs_wallet);
     const CWalletTx* wtx = GetWalletTx(hashTx);
     return wtx && !wtx->isAbandoned() && wtx->GetDepthInMainChain() <= 0 && !wtx->InMempool();
+}
+
+//godcoin: disable transaction (only for coinstake)
+void CWallet::RemoveFromSpends(const COutPoint& outpoint, const uint256& wtxid)
+{
+    std::pair<TxSpends::iterator, TxSpends::iterator> range;
+    range = mapTxSpends.equal_range(outpoint);
+    TxSpends::iterator it = range.first;
+    for(; it != range.second; ++ it)
+    {
+        if(it->second == wtxid)
+        {
+            mapTxSpends.erase(it);
+            break;
+        }
+    }
+    range = mapTxSpends.equal_range(outpoint);
+    SyncMetaData(range);
+}
+
+//godcoin: disable transaction (only for coinstake)
+void CWallet::RemoveFromSpends(const uint256& wtxid)
+{
+    assert(mapWallet.count(wtxid));
+    CWalletTx& thisTx = mapWallet[wtxid];
+    if (thisTx.IsCoinBase()) // Coinbases don't spend anything!
+        return;
+
+    for(const CTxIn& txin:thisTx.tx->vin){
+        RemoveFromSpends(txin.prevout, wtxid);
+    }
+}
+
+//godcoin: disable transaction (only for coinstake)
+void CWallet::DisableTransaction(const CTransaction &tx)
+{
+    if (!tx.IsCoinStake() || !IsFromMe(tx))
+        return; // only disconnecting coinstake requires marking input unspent
+
+    LOCK(cs_wallet);
+    uint256 hash = tx.GetHash();
+    if(AbandonTransaction(hash))
+    {
+        RemoveFromSpends(hash);
+    }
 }
 
 bool CWallet::AbandonTransaction(const uint256& hashTx)
@@ -1265,6 +1316,12 @@ void CWallet::BlockDisconnected(const std::shared_ptr<const CBlock>& pblock) {
     LOCK2(cs_main, cs_wallet);
 
     for (const CTransactionRef& ptx : pblock->vtx) {
+        //godcoin:pos wallets need to refund inputs when disconnecting coinstake
+        const CTransaction& tx = *ptx;
+        if (tx.IsCoinStake() && IsFromMe(tx)){
+            DisableTransaction(tx);
+            continue;
+        }
         SyncTransaction(ptx);
     }
 }

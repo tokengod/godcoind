@@ -76,7 +76,7 @@ bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t 
     arith_uint256 bnWeight = arith_uint256(nValueIn);
     bnTarget *= bnWeight;
     targetProofOfStake = ArithToUint256(bnTarget);
-    //gocoin:pos nNonce
+    //pos nNonce
     int32_t nStakeModifier = 0;
     if(pindexPrev->nHeight > LAST_POW_BLOCK_HEIGHT){
         nStakeModifier = pindexPrev->nNonce;
