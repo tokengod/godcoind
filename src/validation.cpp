@@ -1817,7 +1817,7 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     uint256 hashProof;
     if(block.IsProofOfStake()
             &&!CheckKernelAndUpdateHashProof(block, state, chainparams.GetConsensus(), pindex, view, hashProof)){
-        LogPrintf("CheckKernelAndUpdateHashProof Failed:%s\n", state.GetRejectReason());
+        return error("CheckKernelAndUpdateHashProof Failed:%s\n", state.GetRejectReason());
     }
 
     for (unsigned int i = 0; i < block.vtx.size(); i++)
@@ -1910,14 +1910,14 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
             if (!UndoWriteToDisk(blockundo, _pos, pindex->pprev->GetBlockHash(), chainparams.MessageStart()))
                 return AbortNode(state, "Failed to write undo data");
 
-            //godcoin:update poshashproof
-            if(pindex->hashProof.IsNull()){
-                pindex->hashProof = hashProof;
-            }
-
             // update nUndoPos in block index
             pindex->nUndoPos = _pos.nPos;
             pindex->nStatus |= BLOCK_HAVE_UNDO;
+        }
+
+        //godcoin:update poshashproof
+        if(pindex->hashProof.IsNull()){
+            pindex->hashProof = hashProof;
         }
 
         pindex->RaiseValidity(BLOCK_VALID_SCRIPTS);

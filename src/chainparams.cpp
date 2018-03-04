@@ -183,7 +183,7 @@ public:
 
 
         //godcoin:pos
-        consensus.posLimit = uint256S("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        consensus.posLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPosSubsidyHalvingInterval = 350400; //halving every  1 years
         consensus.nPosTargetTimespan = 15 * 60; // 15 minutes
         consensus.nPosTargetSpacing = 90;  //90 seconds

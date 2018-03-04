@@ -69,6 +69,8 @@ bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t 
 
     // Base target
     arith_uint256 bnTarget;
+    arith_uint256 bnTarget2;
+    bnTarget2.SetCompact(nBits);
     bnTarget.SetCompact(nBits);
 
     // Weighted target
@@ -94,14 +96,20 @@ bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t 
         checkSucceed = false;
     } 
 
-    LogPrintf("%s:CheckStakeKernelHash() nBits=%d weight=%s modifier=%d nTimeBlockFrom=%u nPrevout=%s nTimeBlock=%u hashProof=%s prev=%s\n",
+    LogPrintf("%s:CheckStakeKernelHash() nBits=%d weight=%s modifier=%d nTimeBlockFrom=%u nPrevout=%s nTimeBlock=%u hashProof=%s prev=%s "
+            "target:%d, weight:%d, finalTarget:%d, diff:%d，limit:%d\n",
             checkSucceed ? "succeed" : "failed",
             nBits,
             bnWeight.ToString(),
             nStakeModifier,
             blockFromTime, prevout.ToString(), nTimeBlock,
             hashProofOfStake.ToString(),
-            pindexPrev->ToString());
+            pindexPrev->ToString(),
+            bnTarget2.GetCompact(),
+            bnWeight.GetCompact(),
+            bnTarget.GetCompact(),
+            UintToArith256(hashProofOfStake).GetCompact(),
+            UintToArith256(uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")).GetCompact());
 
     return checkSucceed;
 }
