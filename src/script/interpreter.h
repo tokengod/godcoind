@@ -26,14 +26,14 @@ enum
     SIGHASH_SINGLE = 3,
     SIGHASH_ANYONECANPAY = 0x80,
     //godcoin:two way protect
-    SIGHASH_FORKID = 0x40,
+    SIGHASH_FORKID = 0x47,//ASCII G-->0x47
 };
 
 //godcoin:two way protect
 enum
 {
     FORKID_BCC = 0,
-    FORKID_POS = 79, // Atomic number AU
+    FORKID_POS = 107, // Atomic number AU //ASCII G-->107
 };
 
 static const int FORKID_IN_USE = FORKID_POS;
