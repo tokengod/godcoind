@@ -26,7 +26,7 @@ enum
     SIGHASH_SINGLE = 3,
     SIGHASH_ANYONECANPAY = 0x80,
     //godcoin:two way protect
-    SIGHASH_FORKID = 0x47,//ASCII G-->0x47
+    SIGHASH_FORKID = 0x8,
 };
 
 //godcoin:two way protect
