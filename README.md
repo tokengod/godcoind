@@ -1,82 +1,1 @@
-Bitcoin Core integration/staging tree
-=====================================
-
-[![Build Status](https://travis-ci.org/bitcoin/bitcoin.svg?branch=master)](https://travis-ci.org/bitcoin/bitcoin)
-
-https://bitcoincore.org
-
-What is Bitcoin?
-----------------
-
-Bitcoin is an experimental digital currency that enables instant payments to
-anyone, anywhere in the world. Bitcoin uses peer-to-peer technology to operate
-with no central authority: managing transactions and issuing money are carried
-out collectively by the network. Bitcoin Core is the name of open source
-software which enables the use of this currency.
-
-For more information, as well as an immediately useable, binary version of
-the Bitcoin Core software, see https://bitcoin.org/en/download, or read the
-[original whitepaper](https://bitcoincore.org/bitcoin.pdf).
-
-License
--------
-
-Bitcoin Core is released under the terms of the MIT license. See [COPYING](COPYING) for more
-information or see https://opensource.org/licenses/MIT.
-
-Development Process
--------------------
-
-The `master` branch is regularly built and tested, but is not guaranteed to be
-completely stable. [Tags](https://github.com/bitcoin/bitcoin/tags) are created
-regularly to indicate new official, stable release versions of Bitcoin Core.
-
-The contribution workflow is described in [CONTRIBUTING.md](CONTRIBUTING.md).
-
-The developer [mailing list](https://lists.linuxfoundation.org/mailman/listinfo/bitcoin-dev)
-should be used to discuss complicated or controversial changes before working
-on a patch set.
-
-Developer IRC can be found on Freenode at #bitcoin-core-dev.
-
-Testing
--------
-
-Testing and code review is the bottleneck for development; we get more pull
-requests than we can review and test on short notice. Please be patient and help out by testing
-other people's pull requests, and remember this is a security-critical project where any mistake might cost people
-lots of money.
-
-### Automated Testing
-
-Developers are strongly encouraged to write [unit tests](src/test/README.md) for new code, and to
-submit new unit tests for old code. Unit tests can be compiled and run
-(assuming they weren't disabled in configure) with: `make check`. Further details on running
-and extending unit tests can be found in [/src/test/README.md](/src/test/README.md).
-
-There are also [regression and integration tests](/test), written
-in Python, that are run automatically on the build server.
-These tests can be run (if the [test dependencies](/test) are installed) with: `test/functional/test_runner.py`
-
-The Travis CI system makes sure that every pull request is built for Windows, Linux, and OS X, and that unit/sanity tests are run automatically.
-
-### Manual Quality Assurance (QA) Testing
-
-Changes should be tested by somebody other than the developer who wrote the
-code. This is especially important for large or high-risk changes. It is useful
-to add a test plan to the pull request description if testing the changes is
-not straightforward.
-
-Translations
-------------
-
-Changes to translations as well as new translations can be submitted to
-[Bitcoin Core's Transifex page](https://www.transifex.com/projects/p/bitcoin/).
-
-Translations are periodically pulled from Transifex and merged into the git repository. See the
-[translation process](doc/translation_process.md) for details on how this works.
-
-**Important**: We do not accept translation changes as GitHub pull requests because the next
-pull from Transifex would automatically overwrite them again.
-
-Translators should also subscribe to the [mailing list](https://groups.google.com/forum/#!forum/bitcoin-translators).
+# ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿BitCoin ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿God=====================================https://www.bitcoingod.org# What is Bitcoin God (GOD)?----------------Bitcoin God is a borderless non-profit peer-to-peer organization. Our vision is to leverage a decentralized platform to solve the many problems created by existing centralized system. Bitcoin God as a blockchain based network will enable tracking of each ledger transaction in a transparent and clear fashion. The token holders of Bitcoin God can pinpoint whoever they are trying to help via our peer-to-peer blockchain accurately.Bitcoin God is a completely self monitored decentralized community. The community will decide on the quantity and receivers of its tokens. The tokens mined each day will be used for charitable purposes, out of which, 17 million will be airdropped to the current holders of Bitcoins (close to the outstanding amount of BTC). The remaining 4 million will be airdropped for charitable donation. The process will be via users sharing their wallet address to our social network, and the community will vote to decide on the ratio and amount of airdrops. Bitcoin God will become the first charity platform built on a blockchain. Our goal is to fill the world with love and make the world a better place!An ultimate Bitcoin fork solution. There is no additional issuance or pre-digging. All God coins distribute 1: 1 to all BTC users and GOD community users. GOD preserves and implements Bitcoin’s advantages such as SegWit. It also has remarkable characteristics:- a fork of Bitcoin after block height 501225.- Per-block difficulty adjustment algorithm.- Replay protection (SIGHASH_FORK_ID).- Unique wallet addresses (prefixes of G).- A Proof of Stake consensus system which is secure and energy efficient.Bitcoin God FEATURES-------- Total distribution: 21 million- All holders of Bitcoin will receive an equal proportion AirDrop of GOD tokens.- The remaining tokens will be distributed to GOD token holders and networks through POS mechanisms.- The Bitcoin God foundation does not allow pre-mining or issuance of additional tokens.- Daily output will be distributed to community users.# Bitcoin God Advantages-------- **Smart contract** -`With smart contract technology, we can issue assets and build applications on the blockchain, which makes GOD a token of value and utility`- **Large block size** -`Implemented to solve the notorious network congestion problem and to increase practical value, the Bitcoin God network will be the most efficient and smooth digital currency network`- **POS mining** -`POS makes professional mining machine unnecessary for users and reduces the power consumption. POS is more of true decentralization than POW mining`- **Lightning Network** -`Real-time and mass trading networks can be realized without trust issues of third parties`- **Zero-knowledge proof** -`Implemented to provide confidentiality of payment，while enabling the public blockchain to maintain a decentralized network`# Bitcoin God Purpose-------Ending the current Bitcoin forking chaos, restoring decentralized blockchain like Bitcoin and addressing the inherent congestion in Bitcoin. Enpowering a better blockchain community and allowing for continued development of blockchain technology# Specifications-------Name: Bitcoin GodTicker: GODBlock Reward: 0.19 GODDifficulty Re-target: Every blockP2P Port: 8885RPC Port: 8886Total coin supply: 21 million# License-------BitCoin God Core is released under the terms of the MIT license. See [COPYING](COPYING) for moreinformation or see https://opensource.org/licenses/MIT.# Development Process-------------------The `master` branch is regularly built and tested, but is not guaranteed to becompletely stable. Tags are createdregularly to indicate new official, stable release versions of Bitcoin Core.# Testing-------Testing and code review is the bottleneck for development; we get more pullrequests than we can review and test on short notice. Please be patient and help out by testingother people's pull requests, and remember this is a security-critical project where any mistake might cost peoplelots of money.### Manual Quality Assurance (QA) TestingChanges should be tested by somebody other than the developer who wrote thecode. This is especially important for large or high-risk changes. It is usefulto add a test plan to the pull request description if testing the changes isnot straightforward.
