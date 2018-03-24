@@ -1,4 +1,4 @@
-<h2>Bitcoin GOD API call list </h2>
+<h2>Bitcoin God API call list </h2>
 
 Note: up-to-date API reference .
 
@@ -6,7 +6,7 @@ Note: up-to-date API reference .
 
 <h4>=== Listing my bitcoin addresses ===</h4>
 
-Listing the Bitcoin GOD address|addresses in your wallet is easily done via ''listreceivedbyaddress''. It normally lists only addresses which already have received transactions, however you can list all the addresses by setting the first argument to 0, and the second one to true.
+Listing the Bitcoin God address|addresses in your wallet is easily done via ''listreceivedbyaddress''. It normally lists only addresses which already have received transactions, however you can list all the addresses by setting the first argument to 0, and the second one to true.
 
 accounts explained|Accounts are used to organize addresses.
 
@@ -14,7 +14,7 @@ accounts explained|Accounts are used to organize addresses.
 
 Required arguments are denoted inside  and  Optional arguments are inside [ and ].
 
-<table class="wikitable" style="width: 6%">
+<table class="wikitable" style="width: 80%">
 <tbody><tr>
 <th> Command </th>
 <th> Parameters </th>
