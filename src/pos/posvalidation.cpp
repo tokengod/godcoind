@@ -303,10 +303,10 @@ bool GetPosBlockSubsidy(int nHeight, const Consensus::Params& consensusParams,CA
         int posHalvings
                 = (nHeight - consensusParams.nLastPOWBlock - 1) / consensusParams.nPosSubsidyHalvingInterval;
         // Force block reward to zero when right shift is undefined.
-        if (posHalvings >= 4)
+        if (posHalvings >= 10)
             return 0;
 
-        nSubsidy = 2.7 * COIN;
+        nSubsidy = 0.19 * COIN;
         return true;
     }
     return false;
