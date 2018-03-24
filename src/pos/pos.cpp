@@ -121,33 +121,34 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, CValidationState& state, const C
     if (!tx.IsCoinStake())
         return error("CheckProofOfStake() : called on non-coinstake %s", tx.GetHash().ToString());
 
-    //get prevout Tx
-    // Kernel (input 0) must match the stake hash target (nBits)
-    const CTxIn& txin = tx.vin[0];
+    for (unsigned int i = 0; i < tx.vin.size(); i++) {
+        //get prevout Tx
+        const CTxIn& txin = tx.vin[i];
 
-    Coin coinPrev;
+        Coin coinPrev;
 
-    //check prevout is existing
-    if(!view.GetCoin(txin.prevout, coinPrev))
-        return state.DoS(100, error("CheckProofOfStake() : Stake prevout does not exist %s", txin.prevout.hash.ToString()));
+        //check prevout is existing
+        if(!view.GetCoin(txin.prevout, coinPrev))
+            return state.DoS(100, error("CheckProofOfStake() : Stake prevout[%d] does not exist %s", i, txin.prevout.hash.ToString()));
 
-    if(pindexPrev->nHeight + 1 - coinPrev.nHeight < COINBASE_MATURITY)
-        return state.DoS(100, error("CheckProofOfStake() : Stake prevout is not mature, expecting %i and only matured to %i", COINBASE_MATURITY, pindexPrev->nHeight + 1 - coinPrev.nHeight));
+        if(pindexPrev->nHeight + 1 - coinPrev.nHeight < COINBASE_MATURITY)
+            return state.DoS(100, error("CheckProofOfStake() : Stake prevout[%d] is not mature, expecting %i and only matured to %i", i, COINBASE_MATURITY, pindexPrev->nHeight + 1 - coinPrev.nHeight));
     
-    //check prevout's block
-    CBlockIndex* blockFrom = pindexPrev->GetAncestor(coinPrev.nHeight);
-    if(!blockFrom) 
-        return state.DoS(100, error("CheckProofOfStake() : Block at height %i for prevout can not be loaded", coinPrev.nHeight));
+        //check prevout's block
+        CBlockIndex* blockFrom = pindexPrev->GetAncestor(coinPrev.nHeight);
+        if(!blockFrom) 
+            return state.DoS(100, error("CheckProofOfStake() : Block at height %i for prevout[%d] can not be loaded", coinPrev.nHeight, i));
 
-    // Verify signature
-    //check prevout signature
-    if (!VerifySignatureStake(coinPrev, txin.prevout.hash, tx, 0, SCRIPT_VERIFY_NONE))
-        return state.DoS(100, error("CheckProofOfStake() : VerifySignature failed on coinstake %s", tx.GetHash().ToString()));
+        // Verify signature
+        //check prevout signature
+        if (!VerifySignatureStake(coinPrev, txin.prevout.hash, tx, 0, SCRIPT_VERIFY_NONE))
+            return state.DoS(100, error("CheckProofOfStake() : prevout[%d] VerifySignature failed on coinstake %s", i, tx.GetHash().ToString()));
 
-    //check kernel hash
-    if (!CheckStakeKernelHash(pindexPrev, nBits, blockFrom->nTime, coinPrev.out.nValue, txin.prevout, nTimeBlock, hashProofOfStake, targetProofOfStake, true))
-        return state.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, hashProof=%s", tx.GetHash().ToString(), hashProofOfStake.ToString())); // may occur during initial download or if behind on block chain sync
-
+        //check kernel hash
+        // Kernel (input 0) must match the stake hash target (nBits) 
+        if (i == 0 && !CheckStakeKernelHash(pindexPrev, nBits, blockFrom->nTime, coinPrev.out.nValue, txin.prevout, nTimeBlock, hashProofOfStake, targetProofOfStake, true))
+            return state.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, hashProof=%s", tx.GetHash().ToString(), hashProofOfStake.ToString())); // may occur during initial download or if behind on block chain sync
+    }
     return true;
 }
 
