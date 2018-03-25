@@ -4,7 +4,7 @@ It is the Bitcoin God client and it builds the backbone of the network. It downl
 
 Before running, it's recommended you create an RPC configuration file,create an RPC configuration file on OSX	echo -e "rpcuser=default@\nrpcpassword=default@" > "/Users/${USER}/Library/Application Sup port/Bitcoin/bitcoin.conf"
 	chmod 600 "/Users/${USER}/Library/Application Support/Bitcoin/bitcoin.conf"
-create an RPC configuration file on OSX	echo -e "rpcuser=default@\nrpcpassword=default@" > "/${USER}/.bitcoin/bitcoin.conf"	chmod 600 "/${USER}/.bitcoin/bitcoin.conf"
+create an RPC configuration file on linux or unix	echo -e "rpcuser=default@\nrpcpassword=default@" > "/${USER}/.bitcoin/bitcoin.conf"	chmod 600 "/${USER}/.bitcoin/bitcoin.conf"
 create an RPC configuration file on Windows	echo rpcuser=default@ >%USERPROFILE%\AppData\Roaming\Bitcoin\bitcoin.conf		echo rpcpassword=default@ >>%USERPROFILE%\AppData\Roaming\Bitcoin\bitcoin.conf	Starts the bitcoin daemon		bitcoingodd -daemonThe first time you run bitcoind, it will start downloading the blockchain. This process could take several hours.
 
 You can monitor the download process by looking at the debug.log file:		tail -f debug.log
